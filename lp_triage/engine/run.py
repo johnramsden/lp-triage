@@ -50,7 +50,6 @@ async def run_triage(
     dry_run: bool = False,
     max_posts: int = 20,
     concurrency: int = 4,
-    parallel_projects: bool = False,
     provider: Provider,
     model: str,
     debug: bool = False,

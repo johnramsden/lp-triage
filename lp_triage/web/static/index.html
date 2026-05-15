@@ -352,13 +352,13 @@
         </div>
         <div class="form-row">
           <label>OpenRouter API key</label>
-          <input type="password" id="cfg-or-key" placeholder="sk-or-..." />
-          <button class="show-hide" onclick="togglePass('cfg-or-key')">show</button>
+          <input type="password" id="cfg-or-key" placeholder="Enter new key to replace…" />
+          <span id="cfg-or-key-status" style="font-size:0.8rem;color:var(--warm-grey)"></span>
         </div>
         <div class="form-row">
           <label>Gemini API key</label>
-          <input type="password" id="cfg-gemini-key" placeholder="AIza..." />
-          <button class="show-hide" onclick="togglePass('cfg-gemini-key')">show</button>
+          <input type="password" id="cfg-gemini-key" placeholder="Enter new key to replace…" />
+          <span id="cfg-gemini-key-status" style="font-size:0.8rem;color:var(--warm-grey)"></span>
         </div>
         <div class="form-row">
           <label>Default provider</label>
@@ -442,6 +442,7 @@ function startRun() {
     .then(r => r.json())
     .then(({ run_id }) => {
       currentRunId = run_id;
+      localStorage.setItem('lp-triage-run-id', run_id);
       subscribeSSE(run_id);
     });
 }
@@ -487,6 +488,7 @@ function updateStats(field) {
 
 function onRunDone(ev) {
   setRunStatus('Done');
+  localStorage.removeItem('lp-triage-run-id');
   document.getElementById('btn-start-run').disabled = false;
   document.getElementById('btn-stop-run').style.display = 'none';
   document.getElementById('summary-section').style.display = 'block';
@@ -639,6 +641,13 @@ function loadConfig() {
     document.getElementById('cfg-or-model').value = user?.openrouter?.model || '';
     document.getElementById('cfg-gemini-model').value = user?.gemini?.model || '';
     _projectsData = project?.projects || [];
+    // Show configured/not-configured status; inputs left blank = "no change"
+    const orStatus = document.getElementById('cfg-or-key-status');
+    const gmStatus = document.getElementById('cfg-gemini-key-status');
+    if (orStatus) orStatus.textContent = user?.auth?.openrouter_api_key === '__unchanged__' ? 'configured' : 'not configured';
+    if (gmStatus) gmStatus.textContent = user?.auth?.gemini_api_key === '__unchanged__' ? 'configured' : 'not configured';
+    document.getElementById('cfg-or-key').value = '';
+    document.getElementById('cfg-gemini-key').value = '';
     renderProjects();
   });
 }
@@ -682,10 +691,13 @@ function removeProject(i) {
 
 function saveConfig() {
   const btn = document.getElementById('btn-save-config');
+  // Blank input = "no change" (send sentinel); non-blank = replace with new value
+  const orKey = document.getElementById('cfg-or-key').value;
+  const gmKey = document.getElementById('cfg-gemini-key').value;
   const user = {
     auth: {
-      openrouter_api_key: document.getElementById('cfg-or-key').value,
-      gemini_api_key: document.getElementById('cfg-gemini-key').value,
+      openrouter_api_key: orKey || '__unchanged__',
+      gemini_api_key: gmKey || '__unchanged__',
     },
     defaults: { provider: document.getElementById('cfg-provider').value },
     openrouter: { model: document.getElementById('cfg-or-model').value },

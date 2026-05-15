@@ -22,24 +22,6 @@ from lp_triage.web.server import create_app
 
 
 @pytest.fixture
-def minimal_cfg(tmp_path):
-    return {
-        "auth": {"openrouter_api_key": "test", "gemini_api_key": "", "lp_credentials_file": ""},
-        "defaults": {
-            "provider": "openrouter",
-            "cache_dir": str(tmp_path / "cache"),
-            "output_dir": str(tmp_path / "output"),
-            "bug_list_ttl": 3600,
-            "concurrency": 1,
-        },
-        "openrouter": {"model": "openrouter/auto", "base_url": "https://openrouter.ai/api/v1"},
-        "gemini": {"model": "gemini-2.0-flash"},
-        "repositories": [{"name": "ceph-charms", "url": "https://github.com/canonical/ceph-charms", "branches": ["main"]}],
-        "projects": [{"lp_project": "charm-ceph-mon", "repo": "ceph-charms", "branch": "main", "subdir": "ceph-mon"}],
-    }
-
-
-@pytest.fixture
 def test_client(minimal_cfg):
     app = create_app(minimal_cfg)
     with patch("lp_triage.web.server.load_config", return_value=minimal_cfg):

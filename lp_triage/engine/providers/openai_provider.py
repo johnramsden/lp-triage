@@ -63,6 +63,10 @@ class OpenAIProvider:
                         try:
                             args = json.loads(buf["args"]) if buf["args"] else {}
                         except json.JSONDecodeError:
-                            args = {}
+                            import logging
+                            logging.getLogger(__name__).warning(
+                                "Malformed tool-call JSON for %s: %r", buf["name"], buf["args"]
+                            )
+                            raise
                         yield ToolCall(id=buf["id"], name=buf["name"], arguments=args)
                     tool_bufs.clear()

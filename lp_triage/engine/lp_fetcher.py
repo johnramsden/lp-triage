@@ -207,9 +207,7 @@ class LPFetcher:
         lp = self._get_lp_anonymous()
         bug = lp.bugs[bug_id]
         for msg in bug.messages:
-            owner = msg.owner
-            author = owner.name if owner else ""
-            if author == lp_login and msg.content.startswith(LP_DISCLAIMER):
+            if msg.content.startswith(LP_DISCLAIMER):
                 return True
         return False
 

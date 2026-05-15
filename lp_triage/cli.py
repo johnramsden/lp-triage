@@ -101,7 +101,6 @@ def run(
     debug: bool = typer.Option(False, "--debug", help="Include tool-call events"),
     concurrency: int = typer.Option(4, "--concurrency"),
     max_turns: Optional[int] = typer.Option(None, "--max-turns", help="Max agent loop turns per bug (default from config)"),
-    parallel_projects: bool = typer.Option(False, "--parallel-projects"),
     provider_name: str = typer.Option("", "--provider", help="openrouter or gemini"),
     model: Optional[str] = typer.Option(None, "--model"),
 ) -> None:
@@ -119,6 +118,8 @@ def run(
     classifications: list[dict] = []
 
     resolved_max_turns = max_turns if max_turns is not None else cfg["defaults"].get("max_turns", 10)
+    if resolved_max_turns < 1:
+        raise typer.BadParameter("--max-turns must be >= 1")
 
     async def _run() -> None:
         with open(ndjson_path, "w") as ndjson_f:
@@ -131,7 +132,6 @@ def run(
                 dry_run=dry_run,
                 max_posts=max_posts,
                 concurrency=concurrency,
-                parallel_projects=parallel_projects,
                 provider=provider,
                 model=resolved_model,
                 debug=debug,

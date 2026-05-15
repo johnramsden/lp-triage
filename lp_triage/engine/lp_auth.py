@@ -1,9 +1,10 @@
-"""Launchpad OAuth web flow.
+"""Launchpad OAuth OOB desktop flow.
 
-launchpadlib's built-in get_request_token() never sends oauth_callback to LP,
-so LP falls back to its desktop PIN flow and has nowhere to redirect after
-authorization.  We implement the three-step OAuth 1.0a web flow directly
-using httpx so we can include oauth_callback from the start.
+Launchpad treats unregistered consumers as desktop apps and always uses the
+OOB (out-of-band) flow regardless of whether oauth_callback is sent. The user
+authorises on LP, then our UI prompts them to click Complete — at which point
+we exchange the already-blessed request token for an access token (no verifier
+needed for OOB).
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ import logging
 import urllib.parse as urlparse
 from pathlib import Path
 
-import httplib2
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -21,30 +22,30 @@ _REQUEST_TOKEN_URL = _LP_ROOT + "+request-token"
 _ACCESS_TOKEN_URL = _LP_ROOT + "+access-token"
 _AUTHORIZE_URL = _LP_ROOT + "+authorize-token"
 _CONSUMER_KEY = "lp-triage"
+_TIMEOUT = 15  # seconds
 
 
 def _lp_post(url: str, params: dict) -> dict:
     """POST url-encoded params to LP, return parsed response as dict."""
     body = urlparse.urlencode(params)
-    resp, content = httplib2.Http().request(
-        url,
-        method="POST",
-        headers={"Referer": _LP_ROOT, "Content-Type": "application/x-www-form-urlencoded"},
-        body=body,
-    )
-    if resp.status != 200:
-        raise RuntimeError(
-            f"LP returned HTTP {resp.status}: {content[:200].decode(errors='replace')}"
+    with httpx.Client(timeout=_TIMEOUT) as client:
+        resp = client.post(
+            url,
+            content=body,
+            headers={
+                "Referer": _LP_ROOT,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
         )
-    return dict(urlparse.parse_qsl(content.decode()))
+    if resp.status_code != 200:
+        raise RuntimeError(
+            f"LP returned HTTP {resp.status_code}: {resp.text[:200]}"
+        )
+    return dict(urlparse.parse_qsl(resp.text))
 
 
-def get_request_token(cfg: dict) -> tuple[str, str, str]:
-    """Return (auth_url, token_key, token_secret) using OOB desktop flow.
-
-    LP treats unregistered consumers as desktop apps, so we use the OOB flow:
-    the user authorizes on LP, then our UI prompts them to click Complete.
-    """
+def get_request_token() -> tuple[str, str, str]:
+    """Return (auth_url, token_key, token_secret) using OOB desktop flow."""
     data = _lp_post(_REQUEST_TOKEN_URL, {
         "oauth_consumer_key": _CONSUMER_KEY,
         "oauth_signature_method": "PLAINTEXT",
@@ -63,7 +64,7 @@ def exchange_token(
     oauth_token_secret: str,
     oauth_verifier: str,
 ) -> bool:
-    """Exchange the verified request token for an access token and save credentials."""
+    """Exchange the authorized request token for an access token and save credentials."""
     try:
         params: dict = {
             "oauth_consumer_key": _CONSUMER_KEY,
@@ -86,7 +87,7 @@ def exchange_token(
         )
         creds_file.parent.mkdir(parents=True, exist_ok=True)
 
-        # Write in the same INI format that launchpadlib's Credentials.load() expects
+        # Write in the INI format that launchpadlib's Credentials.load_from_path() expects
         creds_file.write_text(
             f"[1]\n"
             f"consumer_key = {_CONSUMER_KEY}\n"

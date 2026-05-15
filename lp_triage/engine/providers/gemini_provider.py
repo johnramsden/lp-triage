@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from collections.abc import AsyncIterator
 
 from google import genai
@@ -118,7 +119,7 @@ class GeminiProvider:
                 if part.function_call:
                     fc = part.function_call
                     yield ToolCall(
-                        id=fc.name,
+                        id=str(uuid.uuid4()),
                         name=fc.name,
                         arguments=dict(fc.args) if fc.args else {},
                     )

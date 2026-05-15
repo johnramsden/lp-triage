@@ -2,9 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import re
 from pathlib import Path, PurePosixPath
 
 logger = logging.getLogger(__name__)
+
+_SAFE_HASH_RE = re.compile(r'^[0-9a-fA-F]{4,40}$')
+_SAFE_REF_RE = re.compile(r'^[^\x00-\x1f\s\-][^\x00-\x1f\s]*$')
+
+_GIT_ENV = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+
+_GIT_TIMEOUT = 60  # seconds
 
 
 class RepoError(Exception):
@@ -35,15 +44,21 @@ class RepoManager:
             await asyncio.gather(*tasks, return_exceptions=True)
 
     async def get_log(self, repo_dir: Path, branch: str, subdir: str, n: int) -> str:
-        cmd = ["log", f"-{n}", "--oneline", branch]
+        if not _SAFE_REF_RE.match(branch):
+            raise RepoError(f"invalid branch name: {branch!r}")
+        cmd = ["log", f"-{n}", "--oneline", "--", branch]
         if subdir:
-            cmd += ["--", subdir]
+            cmd.append(subdir)
         return await self._git(repo_dir, cmd)
 
     async def get_commit(self, repo_dir: Path, commit_hash: str) -> str:
-        return await self._git(repo_dir, ["show", "--stat", commit_hash])
+        if not _SAFE_HASH_RE.match(commit_hash):
+            raise RepoError(f"invalid commit hash: {commit_hash!r}")
+        return await self._git(repo_dir, ["show", "--stat", "--", commit_hash])
 
     async def read_file(self, repo_dir: Path, branch: str, subdir: str, path: str) -> str:
+        if not _SAFE_REF_RE.match(branch):
+            raise RepoError(f"invalid branch name: {branch!r}")
         safe = self._scoped_path(subdir, path)
         return await self._git(repo_dir, ["show", f"{branch}:{safe}"])
 
@@ -81,8 +96,13 @@ class RepoManager:
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env=_GIT_ENV,
         )
-        stdout, stderr = await proc.communicate()
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=_GIT_TIMEOUT)
+        except asyncio.TimeoutError:
+            proc.kill()
+            raise RepoError(f"{' '.join(cmd[:3])} timed out after {_GIT_TIMEOUT}s")
         if proc.returncode != 0:
             raise RepoError(f"{' '.join(cmd[:3])} failed: {stderr.decode().strip()}")
         return stdout.decode()

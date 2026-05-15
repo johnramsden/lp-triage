@@ -112,15 +112,17 @@ def create_app(initial_cfg: dict | None = None) -> FastAPI:
         html_path = _HERE / "static" / "index.html"
         return HTMLResponse(html_path.read_text())
 
+    _SENTINEL_KEY = "__unchanged__"
+
     @app.get("/config")
     async def get_config() -> JSONResponse:
         user = load_user_config()
         project = load_project_config()
         masked = json.loads(json.dumps(user))
-        if masked.get("auth", {}).get("openrouter_api_key"):
-            masked["auth"]["openrouter_api_key"] = masked["auth"]["openrouter_api_key"][:8] + "***"
-        if masked.get("auth", {}).get("gemini_api_key") and masked["auth"]["gemini_api_key"]:
-            masked["auth"]["gemini_api_key"] = "***"
+        # Replace secrets with a sentinel — never expose any part of the key
+        auth = masked.setdefault("auth", {})
+        auth["openrouter_api_key"] = _SENTINEL_KEY if auth.get("openrouter_api_key") else ""
+        auth["gemini_api_key"] = _SENTINEL_KEY if auth.get("gemini_api_key") else ""
         return JSONResponse({"user": masked, "project": project})
 
     @app.put("/config")
@@ -128,16 +130,13 @@ def create_app(initial_cfg: dict | None = None) -> FastAPI:
         body = await request.json()
         if "user" in body:
             existing_user = load_user_config()
-            # Don't overwrite masked API keys
             new_user = body["user"]
-            if new_user.get("auth", {}).get("openrouter_api_key", "").endswith("***"):
-                new_user.setdefault("auth", {})["openrouter_api_key"] = (
-                    existing_user.get("auth", {}).get("openrouter_api_key", "")
-                )
-            if new_user.get("auth", {}).get("gemini_api_key") == "***":
-                new_user.setdefault("auth", {})["gemini_api_key"] = (
-                    existing_user.get("auth", {}).get("gemini_api_key", "")
-                )
+            # Sentinel means "no change"; empty string means "clear the key"
+            for key in ("openrouter_api_key", "gemini_api_key"):
+                if new_user.get("auth", {}).get(key) == _SENTINEL_KEY:
+                    new_user.setdefault("auth", {})[key] = (
+                        existing_user.get("auth", {}).get(key, "")
+                    )
             save_user_config(new_user)
         if "project" in body:
             save_project_config(body["project"])
@@ -277,10 +276,7 @@ def create_app(initial_cfg: dict | None = None) -> FastAPI:
         """Get LP request token and authorization URL (OOB desktop flow)."""
         from ..engine.lp_auth import get_request_token
 
-        cfg = load_config()
-        auth_url, token_key, token_secret = await asyncio.to_thread(
-            get_request_token, cfg
-        )
+        auth_url, token_key, token_secret = await asyncio.to_thread(get_request_token)
         _pending_oauth[token_key] = token_secret
         return JSONResponse({"auth_url": auth_url, "token_key": token_key})
 
