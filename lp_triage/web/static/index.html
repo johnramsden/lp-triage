@@ -571,6 +571,12 @@ function renderReviewQueue() {
   const empty = document.getElementById('review-empty');
   document.getElementById('queue-count').textContent = `${reviewQueue.length} item${reviewQueue.length===1?'':'s'}`;
 
+  // Preserve any in-progress edits before wiping the DOM
+  reviewQueue.forEach(item => {
+    const ta = document.getElementById(`ta-${item.bug_id}`);
+    if (ta) item.comment_body = ta.value;
+  });
+
   if (reviewQueue.length === 0) {
     container.innerHTML = '';
     empty.style.display = 'block';
