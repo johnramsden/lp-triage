@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "lp-triage"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "typer>=0.15",
+    "tomli-w>=1.1",
+    "launchpadlib>=2.1",
+    "openai>=1.77",
+    "google-genai>=1.16",
+    "httpx>=0.28",
+    "sse-starlette>=2.2",
+]
+
+[project.scripts]
+lp-triage = "lp_triage.cli:app"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+# Run UI (Playwright) tests last to avoid event-loop conflicts with asyncio tests
+testpaths = ["tests/unit", "tests/integration", "tests/ui"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "pytest-playwright>=0.7",
+    "httpx>=0.28",
+    "respx>=0.22",
+]

@@ -1,0 +1,795 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>lp-triage</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500&family=Ubuntu+Mono&display=swap" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vanilla-framework/4.12.0/vanilla.min.css" />
+  <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js" defer></script>
+  <style>
+    :root {
+      --ubuntu-orange: #E95420;
+      --black: #000000;
+      --dark-aubergine: #2C001E;
+      --cool-grey: #333333;
+      --warm-grey: #AEA79F;
+      --white: #FFFFFF;
+      --canonical-aubergine: #772953;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Ubuntu', sans-serif;
+      background: var(--black);
+      color: var(--white);
+      min-height: 100vh;
+    }
+    .l-application {
+      display: flex;
+      min-height: 100vh;
+    }
+    .l-sidebar {
+      width: 240px;
+      background: var(--dark-aubergine);
+      padding: 1.5rem 1rem;
+      flex-shrink: 0;
+    }
+    .l-main {
+      flex: 1;
+      padding: 1.5rem 2rem;
+      overflow: auto;
+    }
+    h1.logo {
+      font-size: 1.2rem;
+      font-weight: 500;
+      color: var(--ubuntu-orange);
+      margin: 0 0 2rem;
+      letter-spacing: 0.05em;
+    }
+    .nav-link {
+      display: block;
+      padding: 0.5rem 0.75rem;
+      color: var(--warm-grey);
+      text-decoration: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-bottom: 0.25rem;
+      transition: background 0.15s;
+    }
+    .nav-link:hover, .nav-link.active {
+      background: rgba(255,255,255,0.08);
+      color: var(--white);
+    }
+    .nav-link.active {
+      border-left: 3px solid var(--ubuntu-orange);
+      padding-left: calc(0.75rem - 3px);
+    }
+    /* Panels */
+    .panel { display: none; }
+    .panel.active { display: block; }
+    /* Cards */
+    .card {
+      background: var(--cool-grey);
+      border-radius: 6px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .card-title {
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: var(--warm-grey);
+      margin: 0 0 0.5rem;
+    }
+    /* Buttons */
+    .btn {
+      display: inline-block;
+      padding: 0.5rem 1.25rem;
+      border-radius: 4px;
+      font-family: 'Ubuntu', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary { background: var(--ubuntu-orange); color: var(--white); }
+    .btn-secondary { background: var(--canonical-aubergine); color: var(--white); }
+    .btn-outline { background: transparent; border: 1px solid var(--warm-grey); color: var(--warm-grey); }
+    .btn:not(:disabled):hover { opacity: 0.85; }
+    /* Event log */
+    #event-log {
+      font-family: 'Ubuntu Mono', monospace;
+      font-size: 0.82rem;
+      background: #111;
+      border-radius: 4px;
+      padding: 1rem;
+      max-height: 420px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: var(--warm-grey);
+    }
+    .log-run_start, .log-run_done { color: var(--ubuntu-orange); }
+    .log-project_start, .log-project_done { color: #7ec8e3; }
+    .log-bug_start { color: var(--white); }
+    .log-classification { color: #a8ff78; }
+    .log-bug_error { color: #ff6b6b; }
+    .log-comment_posted { color: #78ff78; }
+    .log-token_usage { color: #888; }
+    /* Summary table */
+    #summary-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    #summary-table th {
+      background: var(--dark-aubergine);
+      color: var(--warm-grey);
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid #444;
+    }
+    #summary-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #2a2a2a; }
+    #summary-table tr:hover td { background: rgba(255,255,255,0.04); }
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 3px;
+      font-size: 0.78rem;
+      font-weight: 500;
+    }
+    .badge-bug { background: #7f1010; color: #ffaaaa; }
+    .badge-enhancement { background: #1a4a7f; color: #aaccff; }
+    .badge-question { background: #4a3a00; color: #ffe380; }
+    .badge-support { background: #2a1a4a; color: #ccaaff; }
+    .badge-already_fixed { background: #0a3a1a; color: #78ff78; }
+    .badge-invalid { background: #333; color: #999; }
+    .badge-unknown { background: #222; color: #666; }
+    /* Review queue */
+    .review-card {
+      background: var(--cool-grey);
+      border-radius: 6px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+      border-left: 3px solid var(--ubuntu-orange);
+    }
+    .review-card h3 { margin: 0 0 0.5rem; font-size: 1rem; }
+    .review-card .meta { color: var(--warm-grey); font-size: 0.85rem; margin-bottom: 0.75rem; }
+    .review-card textarea {
+      width: 100%;
+      min-height: 180px;
+      background: #111;
+      color: var(--white);
+      border: 1px solid #444;
+      border-radius: 4px;
+      padding: 0.75rem;
+      font-family: 'Ubuntu Mono', monospace;
+      font-size: 0.82rem;
+      resize: vertical;
+      margin-bottom: 0.75rem;
+    }
+    .review-actions { display: flex; gap: 0.75rem; }
+    /* Config form */
+    .config-section { margin-bottom: 2rem; }
+    .config-section h2 { font-size: 1rem; color: var(--warm-grey); margin-bottom: 1rem; border-bottom: 1px solid #333; padding-bottom: 0.5rem; }
+    .form-row { display: flex; align-items: center; margin-bottom: 0.75rem; gap: 1rem; }
+    .form-row label { min-width: 180px; color: var(--warm-grey); font-size: 0.88rem; }
+    .form-row input, .form-row select {
+      flex: 1;
+      background: #111;
+      border: 1px solid #444;
+      color: var(--white);
+      border-radius: 4px;
+      padding: 0.4rem 0.6rem;
+      font-family: 'Ubuntu', sans-serif;
+      font-size: 0.9rem;
+    }
+    .form-row input[type="password"] { letter-spacing: 0.1em; }
+    .show-hide { background: none; border: none; color: var(--warm-grey); cursor: pointer; font-size: 0.8rem; padding: 0 0.25rem; }
+    /* LP connect */
+    .lp-connect { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+    .connected-badge { background: #0a3a1a; color: #78ff78; padding: 0.2rem 0.6rem; border-radius: 3px; font-size: 0.8rem; }
+    /* Run controls */
+    .run-controls { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+    .run-control-field { display: flex; flex-direction: column; gap: 0.3rem; }
+    .run-control-field label { color: var(--white); font-size: 0.88rem; font-weight: 500; }
+    .run-control-field .field-desc { color: var(--warm-grey); font-size: 0.78rem; line-height: 1.35; }
+    .run-control-field input[type="number"], .run-control-field select {
+      background: #111; border: 1px solid #444; color: var(--white);
+      border-radius: 4px; padding: 0.35rem 0.6rem; font-size: 0.88rem; width: 100%;
+    }
+    .run-control-field.checkbox-field { flex-direction: row; align-items: flex-start; gap: 0.6rem; }
+    .run-control-field.checkbox-field input[type="checkbox"] { margin-top: 0.15rem; flex-shrink: 0; accent-color: var(--ubuntu-orange); width: 16px; height: 16px; }
+    .run-control-field.checkbox-field .field-text { display: flex; flex-direction: column; gap: 0.2rem; }
+    .run-actions { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+    /* Stats bar */
+    .stats-bar { display: flex; gap: 2rem; padding: 0.75rem 1rem; background: var(--dark-aubergine); border-radius: 4px; margin-bottom: 1rem; font-size: 0.88rem; }
+    .stats-bar span { color: var(--warm-grey); }
+    .stats-bar strong { color: var(--white); }
+    /* Spinner */
+    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #444; border-top-color: var(--ubuntu-orange); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 0.4rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    /* Section header */
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+    .section-header h2 { margin: 0; font-size: 1.1rem; }
+  </style>
+</head>
+<body>
+<div class="l-application">
+  <nav class="l-sidebar">
+    <h1 class="logo">lp-triage</h1>
+    <a class="nav-link active" data-panel="run" onclick="showPanel('run')">Run</a>
+    <a class="nav-link" data-panel="review" onclick="showPanel('review')">Review queue</a>
+    <a class="nav-link" data-panel="config" onclick="showPanel('config')">Configuration</a>
+  </nav>
+
+  <main class="l-main">
+
+    <!-- Run panel -->
+    <div id="panel-run" class="panel active">
+      <div class="section-header">
+        <h2>Triage run</h2>
+        <div id="run-status"></div>
+      </div>
+
+      <div class="run-controls">
+        <div class="run-control-field">
+          <label for="run-mode">Mode</label>
+          <select id="run-mode">
+            <option value="auto">Auto</option>
+            <option value="review">Review</option>
+          </select>
+          <span class="field-desc" id="run-mode-desc">
+            <b>Auto</b> — classify all bugs and post automatically.<br>
+            <b>Review</b> — each classification goes into a queue for you to approve, edit, or skip before anything is posted.
+          </span>
+        </div>
+
+        <div class="run-control-field">
+          <label for="run-provider">Provider</label>
+          <select id="run-provider">
+            <option value="openrouter">OpenRouter</option>
+            <option value="gemini">Gemini</option>
+          </select>
+          <span class="field-desc">AI provider to use for classification. API key must be set in Configuration.</span>
+        </div>
+
+        <div class="run-control-field">
+          <label for="run-limit">Bug limit</label>
+          <input id="run-limit" type="number" min="1" max="200" placeholder="all" />
+          <span class="field-desc">Max bugs to process per project. Leave blank to process all active bugs.</span>
+        </div>
+
+        <div class="run-control-field">
+          <label for="run-max-turns">Max turns</label>
+          <input id="run-max-turns" type="number" min="1" max="50" placeholder="10" />
+          <span class="field-desc">How many back-and-forth exchanges the agent can make per bug before giving up. Higher values allow deeper investigation; lower values cut costs.</span>
+        </div>
+
+        <div class="run-control-field checkbox-field">
+          <input type="checkbox" id="run-post" />
+          <div class="field-text">
+            <label for="run-post">Post comments</label>
+            <span class="field-desc">Write the AI classification as a comment on each Launchpad bug. Only posted when evidence is found. Requires LP credentials.</span>
+          </div>
+        </div>
+
+        <div class="run-control-field checkbox-field">
+          <input type="checkbox" id="run-dry-run" />
+          <div class="field-text">
+            <label for="run-dry-run">Dry run</label>
+            <span class="field-desc">Go through the full posting flow — check idempotency, build the comment — but skip the actual LP write. Useful for testing without touching Launchpad.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="run-actions">
+        <button class="btn btn-primary" id="btn-start-run" onclick="startRun()">Start run</button>
+        <button class="btn btn-outline" id="btn-stop-run" style="display:none" onclick="stopRun()">Stop run</button>
+        <button class="btn btn-outline" id="btn-post-all" style="display:none" onclick="postAll()">Post all approved</button>
+      </div>
+
+      <div id="stats-bar" class="stats-bar" style="display:none">
+        <span>Bugs: <strong id="stat-bugs">0</strong></span>
+        <span>Posted: <strong id="stat-posted">0</strong></span>
+        <span>Errors: <strong id="stat-errors">0</strong></span>
+        <span>Tokens in: <strong id="stat-in">0</strong></span>
+        <span>Tokens out: <strong id="stat-out">0</strong></span>
+      </div>
+
+      <div id="event-log"></div>
+
+      <div id="summary-section" style="display:none; margin-top:1.5rem">
+        <div class="section-header">
+          <h2>Results</h2>
+        </div>
+        <table id="summary-table">
+          <thead>
+            <tr>
+              <th>Bug</th>
+              <th>Title</th>
+              <th>Category</th>
+              <th>Importance</th>
+              <th>Summary</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="summary-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Review panel -->
+    <div id="panel-review" class="panel">
+      <div class="section-header">
+        <h2>Review queue</h2>
+        <span id="queue-count" style="color:var(--warm-grey); font-size:0.88rem"></span>
+      </div>
+      <div id="review-queue"></div>
+      <div id="review-empty" style="color:var(--warm-grey); display:none">
+        No items in queue. Start a run in Review mode to populate it.
+      </div>
+    </div>
+
+    <!-- Config panel -->
+    <div id="panel-config" class="panel">
+      <div class="section-header">
+        <h2>Configuration</h2>
+        <button class="btn btn-primary" id="btn-save-config" onclick="saveConfig()">Save</button>
+      </div>
+
+      <div class="config-section">
+        <h2>Personal settings</h2>
+        <div class="lp-connect">
+          <span id="lp-status" style="color:var(--warm-grey)">Launchpad: not connected</span>
+          <button class="btn btn-outline" id="btn-lp-connect" onclick="startLPAuth()">Connect Launchpad</button>
+        </div>
+        <div id="lp-pending" style="display:none;margin-top:0.75rem;padding:0.75rem;background:#1a1a1a;border-radius:4px;border:1px solid #444;">
+          <p style="margin:0 0 0.5rem;font-size:0.9rem;">
+            Launchpad has opened in a new tab. Authorize <strong>lp-triage</strong> there,
+            then click <strong>Complete authorization</strong> below.
+          </p>
+          <button class="btn btn-positive" onclick="completeLPAuth()">Complete authorization</button>
+          <button class="btn btn-neutral" style="margin-left:0.5rem;" onclick="cancelLPAuth()">Cancel</button>
+        </div>
+        <div class="form-row">
+          <label>OpenRouter API key</label>
+          <input type="password" id="cfg-or-key" placeholder="sk-or-..." />
+          <button class="show-hide" onclick="togglePass('cfg-or-key')">show</button>
+        </div>
+        <div class="form-row">
+          <label>Gemini API key</label>
+          <input type="password" id="cfg-gemini-key" placeholder="AIza..." />
+          <button class="show-hide" onclick="togglePass('cfg-gemini-key')">show</button>
+        </div>
+        <div class="form-row">
+          <label>Default provider</label>
+          <select id="cfg-provider">
+            <option value="openrouter">OpenRouter</option>
+            <option value="gemini">Gemini</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>OpenRouter model</label>
+          <input type="text" id="cfg-or-model" />
+        </div>
+        <div class="form-row">
+          <label>Gemini model</label>
+          <input type="text" id="cfg-gemini-model" />
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h2>Project settings</h2>
+        <div style="display:flex;gap:1rem;padding:0 0 0.4rem;font-size:0.78rem;color:var(--warm-grey);flex-wrap:wrap">
+          <span style="flex:1;min-width:140px">LP project<br><span style="font-weight:300;opacity:0.75">Launchpad project name (e.g. <em>ceph</em>)</span></span>
+          <span style="flex:2;min-width:200px">Repository URL<br><span style="font-weight:300;opacity:0.75">Full git clone URL — ↗ opens it</span></span>
+          <span style="flex:1;min-width:100px">Branch<br><span style="font-weight:300;opacity:0.75">Git branch to read code from</span></span>
+          <span style="flex:1;min-width:100px">Subdirectory<br><span style="font-weight:300;opacity:0.75">Scope agent to a path — leave blank for whole repo</span></span>
+          <span style="width:2rem"></span>
+        </div>
+        <div id="projects-list"></div>
+        <button class="btn btn-outline" onclick="addProject()" style="margin-top:0.5rem">+ Add project</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────────────
+let currentRunId = null;
+let runMode = 'auto';
+let reviewQueue = [];    // [{bug_id, title, result, comment_body, run_id}]
+let bugTitles = {};      // bug_id -> title
+let stats = { bugs: 0, posted: 0, errors: 0, tin: 0, tout: 0 };
+let approvedBugs = new Set();
+
+// ─── Panel routing ────────────────────────────────────────────────────────────
+function showPanel(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  document.querySelector(`[data-panel="${name}"]`).classList.add('active');
+  if (name === 'config') loadConfig();
+  if (name === 'review') renderReviewQueue();
+}
+
+// ─── Run ─────────────────────────────────────────────────────────────────────
+function startRun() {
+  runMode = document.getElementById('run-mode').value;
+  const provider = document.getElementById('run-provider').value;
+  const limit = document.getElementById('run-limit').value;
+  const maxTurns = document.getElementById('run-max-turns').value;
+  const dryRun = document.getElementById('run-dry-run').checked;
+  const postComment = document.getElementById('run-post').checked;
+
+  const body = { provider, dry_run: dryRun, post_comment: postComment };
+  if (limit) body.limit = parseInt(limit);
+  if (maxTurns) body.max_turns = parseInt(maxTurns);
+
+  stats = { bugs: 0, posted: 0, errors: 0, tin: 0, tout: 0 };
+  document.getElementById('event-log').textContent = '';
+  document.getElementById('summary-tbody').innerHTML = '';
+  document.getElementById('summary-section').style.display = 'none';
+  document.getElementById('stats-bar').style.display = 'flex';
+  document.getElementById('btn-post-all').style.display = 'none';
+  bugTitles = {};
+
+  setRunStatus('<span class="spinner"></span> Running…');
+  document.getElementById('btn-start-run').disabled = true;
+  document.getElementById('btn-stop-run').style.display = 'inline-block';
+
+  fetch('/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(r => r.json())
+    .then(({ run_id }) => {
+      currentRunId = run_id;
+      subscribeSSE(run_id);
+    });
+}
+
+function subscribeSSE(runId) {
+  const es = new EventSource(`/run/${runId}/stream`);
+  es.onmessage = e => {
+    const ev = JSON.parse(e.data);
+    handleEvent(ev, runId);
+    if (ev.t === 'run_done') {
+      es.close();
+      onRunDone(ev);
+    } else if (ev.t === 'run_stopped') {
+      es.close();
+    }
+  };
+  es.onerror = () => { setRunStatus('Stream error'); es.close(); };
+}
+
+function handleEvent(ev, runId) {
+  appendLog(ev);
+  if (ev.t === 'bug_start') bugTitles[ev.bug_id] = ev.title;
+  if (ev.t === 'classification') {
+    updateStats('bugs');
+    addSummaryRow(ev.bug_id, bugTitles[ev.bug_id] || '?', ev.result);
+    if (runMode === 'review') {
+      addToReviewQueue(ev.bug_id, bugTitles[ev.bug_id] || '?', ev.result, runId);
+    }
+  }
+  if (ev.t === 'bug_error') updateStats('errors');
+  if (ev.t === 'comment_posted') updateStats('posted');
+  if (ev.t === 'token_usage') {
+    stats.tin += ev.input; stats.tout += ev.output;
+    document.getElementById('stat-in').textContent = stats.tin.toLocaleString();
+    document.getElementById('stat-out').textContent = stats.tout.toLocaleString();
+  }
+}
+
+function updateStats(field) {
+  stats[field]++;
+  document.getElementById('stat-' + field).textContent = stats[field];
+}
+
+function onRunDone(ev) {
+  setRunStatus('Done');
+  document.getElementById('btn-start-run').disabled = false;
+  document.getElementById('btn-stop-run').style.display = 'none';
+  document.getElementById('summary-section').style.display = 'block';
+  if (approvedBugs.size > 0) document.getElementById('btn-post-all').style.display = 'inline-block';
+}
+
+function stopRun() {
+  if (!currentRunId) return;
+  fetch(`/run/${currentRunId}/stop`, { method: 'POST' })
+    .then(r => r.json())
+    .then(() => {
+      setRunStatus('Stopped');
+      document.getElementById('btn-start-run').disabled = false;
+      document.getElementById('btn-stop-run').style.display = 'none';
+      if (document.getElementById('summary-tbody').rows.length > 0) {
+        document.getElementById('summary-section').style.display = 'block';
+      }
+    });
+}
+
+function setRunStatus(html) {
+  document.getElementById('run-status').innerHTML = html;
+}
+
+// ─── Event log ───────────────────────────────────────────────────────────────
+function appendLog(ev) {
+  const el = document.getElementById('event-log');
+  const line = document.createElement('div');
+  line.className = 'log-' + (ev.t || 'unknown');
+  if (ev.t === 'classification') {
+    line.textContent = `[${ev.t}] bug=${ev.bug_id} cat=${ev.result?.category} evidence=${(ev.result?.evidence||[]).length}`;
+  } else {
+    const { t, ts, ...rest } = ev;
+    const summary = Object.entries(rest).map(([k,v]) => `${k}=${typeof v==='object'?JSON.stringify(v):v}`).join(' ');
+    line.textContent = `[${t}] ${summary}`;
+  }
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ─── Summary table ────────────────────────────────────────────────────────────
+function addSummaryRow(bugId, title, result) {
+  const tbody = document.getElementById('summary-tbody');
+  const tr = document.createElement('tr');
+  const cat = result.category || 'unknown';
+  tr.innerHTML = `
+    <td><a href="https://bugs.launchpad.net/bugs/${bugId}" target="_blank" style="color:var(--ubuntu-orange)">#${bugId}</a></td>
+    <td>${escHtml(title)}</td>
+    <td><span class="badge badge-${cat}">${cat}</span></td>
+    <td>${escHtml(result.importance||'')}</td>
+    <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(result.summary||'')}</td>
+    <td>${escHtml(result.recommended_action||'')}</td>
+  `;
+  tbody.appendChild(tr);
+}
+
+// ─── Review queue ─────────────────────────────────────────────────────────────
+function addToReviewQueue(bugId, title, result, runId) {
+  const body = buildCommentBody(result, bugId);
+  reviewQueue.push({ bug_id: bugId, title, result, comment_body: body, run_id: runId });
+  if (document.getElementById('panel-review').classList.contains('active')) {
+    renderReviewQueue();
+  }
+}
+
+function buildCommentBody(result, bugId) {
+  const disclaimer = '[lp-triage AI report — informational only; a human must decide final actions]';
+  let body = `${disclaimer}\n\n`;
+  body += `**Category**: ${result.category||'unknown'}\n\n`;
+  body += `**Summary**: ${result.summary||''}\n\n`;
+  body += `**Recommended action**: ${result.recommended_action||''}\n\n`;
+  if (result.potential_resolution_detail) body += `**Potential resolution detail**:\n${result.potential_resolution_detail}\n\n`;
+  if (result.fix_reference) body += `**Fix reference**: ${result.fix_reference}\n\n`;
+  if ((result.evidence||[]).length) {
+    body += `**Evidence**:\n` + result.evidence.map(u => `- ${u}`).join('\n') + '\n';
+  }
+  return body.trim();
+}
+
+function renderReviewQueue() {
+  const container = document.getElementById('review-queue');
+  const empty = document.getElementById('review-empty');
+  document.getElementById('queue-count').textContent = `${reviewQueue.length} item${reviewQueue.length===1?'':'s'}`;
+
+  if (reviewQueue.length === 0) {
+    container.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  container.innerHTML = '';
+
+  reviewQueue.forEach((item, idx) => {
+    const div = document.createElement('div');
+    div.className = 'review-card';
+    div.id = `review-${item.bug_id}`;
+    const cat = item.result.category || 'unknown';
+    div.innerHTML = `
+      <h3><a href="https://bugs.launchpad.net/bugs/${item.bug_id}" target="_blank" style="color:var(--ubuntu-orange)">#${item.bug_id}</a> — ${escHtml(item.title)}</h3>
+      <div class="meta"><span class="badge badge-${cat}">${cat}</span> &nbsp; ${escHtml(item.result.summary||'')}</div>
+      <textarea id="ta-${item.bug_id}">${escHtml(item.comment_body)}</textarea>
+      <div class="review-actions">
+        <button class="btn btn-primary" onclick="approveAndPost(${idx})">Approve &amp; post</button>
+        <button class="btn btn-outline" onclick="skipReview(${idx})">Skip</button>
+      </div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+function approveAndPost(idx) {
+  const item = reviewQueue[idx];
+  const body = document.getElementById(`ta-${item.bug_id}`).value;
+  postComment(item.run_id, item.bug_id, body, idx);
+}
+
+function skipReview(idx) {
+  reviewQueue.splice(idx, 1);
+  renderReviewQueue();
+}
+
+function postComment(runId, bugId, body, idx) {
+  fetch(`/run/${runId}/bugs/${bugId}/post`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ comment_body: body, dry_run: document.getElementById('run-dry-run').checked }),
+  }).then(r => r.json()).then(data => {
+    reviewQueue.splice(idx, 1);
+    renderReviewQueue();
+  }).catch(err => alert('Post failed: ' + err));
+}
+
+function postAll() {
+  // Post all items currently in the summary that have evidence
+  // (simplified: uses the review queue)
+  reviewQueue.slice().forEach((item, idx) => approveAndPost(idx));
+}
+
+// ─── Config ───────────────────────────────────────────────────────────────────
+let _projectsData = [];
+
+function loadConfig() {
+  fetch('/config').then(r => r.json()).then(({ user, project }) => {
+    document.getElementById('cfg-or-key').value = user?.auth?.openrouter_api_key || '';
+    document.getElementById('cfg-gemini-key').value = user?.auth?.gemini_api_key || '';
+    document.getElementById('cfg-provider').value = user?.defaults?.provider || 'openrouter';
+    document.getElementById('cfg-or-model').value = user?.openrouter?.model || '';
+    document.getElementById('cfg-gemini-model').value = user?.gemini?.model || '';
+    _projectsData = project?.projects || [];
+    renderProjects();
+  });
+}
+
+function renderProjects() {
+  const container = document.getElementById('projects-list');
+  container.innerHTML = '';
+  _projectsData.forEach((p, i) => {
+    const url = p.url || '';
+    const linkBtn = url
+      ? `<a href="${escHtml(url)}" target="_blank" rel="noopener" title="Open repository" style="color:var(--warm-grey);text-decoration:none;font-size:1rem;line-height:1;flex-shrink:0" onmouseover="this.style.color='white'" onmouseout="this.style.color='var(--warm-grey)'">↗</a>`
+      : '';
+    const div = document.createElement('div');
+    div.className = 'card';
+    div.style.marginBottom = '0.5rem';
+    div.innerHTML = `
+      <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap">
+        <input type="text" value="${escHtml(p.lp_project)}" placeholder="lp_project" style="flex:1;min-width:140px;background:#111;border:1px solid #444;color:white;border-radius:4px;padding:.3rem .5rem" oninput="_projectsData[${i}].lp_project=this.value" />
+        <div style="display:flex;align-items:center;gap:0.4rem;flex:2;min-width:200px">
+          <input type="url" value="${escHtml(url)}" placeholder="https://github.com/org/repo" style="flex:1;background:#111;border:1px solid #444;color:white;border-radius:4px;padding:.3rem .5rem" oninput="_projectsData[${i}].url=this.value;renderProjects()" />
+          ${linkBtn}
+        </div>
+        <input type="text" value="${escHtml(p.branch)}" placeholder="branch" style="flex:1;min-width:100px;background:#111;border:1px solid #444;color:white;border-radius:4px;padding:.3rem .5rem" oninput="_projectsData[${i}].branch=this.value" />
+        <input type="text" value="${escHtml(p.subdir)}" placeholder="subdir (optional)" style="flex:1;min-width:100px;background:#111;border:1px solid #444;color:white;border-radius:4px;padding:.3rem .5rem" oninput="_projectsData[${i}].subdir=this.value" />
+        <button class="btn btn-outline" style="padding:.25rem .6rem;font-size:.8rem" onclick="removeProject(${i})">✕</button>
+      </div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+function addProject() {
+  _projectsData.push({ lp_project: '', url: '', branch: 'main', subdir: '' });
+  renderProjects();
+}
+
+function removeProject(i) {
+  _projectsData.splice(i, 1);
+  renderProjects();
+}
+
+function saveConfig() {
+  const btn = document.getElementById('btn-save-config');
+  const user = {
+    auth: {
+      openrouter_api_key: document.getElementById('cfg-or-key').value,
+      gemini_api_key: document.getElementById('cfg-gemini-key').value,
+    },
+    defaults: { provider: document.getElementById('cfg-provider').value },
+    openrouter: { model: document.getElementById('cfg-or-model').value },
+    gemini: { model: document.getElementById('cfg-gemini-model').value },
+  };
+  const project = { projects: _projectsData };
+  fetch('/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user, project }),
+  }).then(() => {
+    btn.textContent = 'Saved!';
+    setTimeout(() => { btn.textContent = 'Save'; }, 1500);
+  });
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function togglePass(id) {
+  const el = document.getElementById(id);
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+// ─── Launchpad OAuth (OOB desktop flow) ──────────────────────────────────────
+let _lpTokenKey = null;
+
+async function startLPAuth() {
+  const btn = document.getElementById('btn-lp-connect');
+  btn.disabled = true;
+  btn.textContent = 'Connecting…';
+  try {
+    const resp = await fetch('/auth/lp');
+    if (!resp.ok) throw new Error(await resp.text());
+    const { auth_url, token_key } = await resp.json();
+    _lpTokenKey = token_key;
+    window.open(auth_url, '_blank');
+    document.getElementById('lp-pending').style.display = 'block';
+    btn.style.display = 'none';
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = 'Connect Launchpad';
+    alert('Failed to start LP auth: ' + e.message);
+  }
+}
+
+async function completeLPAuth() {
+  if (!_lpTokenKey) return;
+  const completeBtn = document.querySelector('#lp-pending .btn-positive');
+  completeBtn.disabled = true;
+  completeBtn.textContent = 'Connecting…';
+  try {
+    const resp = await fetch('/auth/lp/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token_key: _lpTokenKey }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) throw new Error(data.error || 'Unknown error');
+    _lpTokenKey = null;
+    document.getElementById('lp-pending').style.display = 'none';
+    const status = document.getElementById('lp-status');
+    status.textContent = 'Launchpad: connected';
+    status.style.color = '#0e8420';
+    const btn = document.getElementById('btn-lp-connect');
+    btn.style.display = '';
+    btn.disabled = false;
+    btn.textContent = 'Reconnect';
+  } catch (e) {
+    completeBtn.disabled = false;
+    completeBtn.textContent = 'Complete authorization';
+    alert('LP authorization failed: ' + e.message);
+  }
+}
+
+function cancelLPAuth() {
+  _lpTokenKey = null;
+  document.getElementById('lp-pending').style.display = 'none';
+  const btn = document.getElementById('btn-lp-connect');
+  btn.style.display = '';
+  btn.disabled = false;
+  btn.textContent = 'Connect Launchpad';
+}
+
+// ─── Reload recovery ─────────────────────────────────────────────────────────
+// On load, check localStorage for an in-progress run to recover
+(function init() {
+  const savedRunId = localStorage.getItem('lp-triage-run-id');
+  if (savedRunId) {
+    fetch(`/run/${savedRunId}/results`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data) { localStorage.removeItem('lp-triage-run-id'); return; }
+        // Replay from NDJSON to rebuild state
+        return fetch(`/run/${savedRunId}/replay`).then(r => r.json());
+      })
+      .then(data => {
+        if (!data) return;
+        data.events.forEach(ev => {
+          handleEvent(ev, savedRunId);
+          if (ev.t === 'run_done') onRunDone(ev);
+        });
+      });
+  }
+})();
+</script>
+</body>
+</html>
