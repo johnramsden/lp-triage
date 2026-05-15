@@ -68,8 +68,8 @@ class LPFetcher:
         self._save_bug_detail_cache(bug_id, date_last_updated, detail)
         return detail
 
-    async def has_existing_ai_comment(self, bug_id: int, lp_login: str) -> bool:
-        return await asyncio.to_thread(self._check_existing_comment, bug_id, lp_login)
+    async def has_existing_ai_comment(self, bug_id: int) -> bool:
+        return await asyncio.to_thread(self._check_existing_comment, bug_id)
 
     async def post_comment(self, bug_id: int, body: str, dry_run: bool = False) -> str:
         if dry_run:
@@ -203,7 +203,7 @@ class LPFetcher:
             "messages": messages,
         }
 
-    def _check_existing_comment(self, bug_id: int, lp_login: str) -> bool:
+    def _check_existing_comment(self, bug_id: int) -> bool:
         lp = self._get_lp_anonymous()
         bug = lp.bugs[bug_id]
         for msg in bug.messages:

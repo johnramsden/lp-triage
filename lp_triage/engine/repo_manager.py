@@ -46,7 +46,8 @@ class RepoManager:
     async def get_log(self, repo_dir: Path, branch: str, subdir: str, n: int) -> str:
         if not _SAFE_REF_RE.match(branch):
             raise RepoError(f"invalid branch name: {branch!r}")
-        cmd = ["log", f"-{n}", "--oneline", "--", branch]
+        # branch must come before -- so git treats it as a ref, not a pathspec
+        cmd = ["log", f"-{n}", "--oneline", branch, "--"]
         if subdir:
             cmd.append(subdir)
         return await self._git(repo_dir, cmd)
@@ -54,7 +55,9 @@ class RepoManager:
     async def get_commit(self, repo_dir: Path, commit_hash: str) -> str:
         if not _SAFE_HASH_RE.match(commit_hash):
             raise RepoError(f"invalid commit hash: {commit_hash!r}")
-        return await self._git(repo_dir, ["show", "--stat", "--", commit_hash])
+        # hash before -- so git treats it as a rev; -- terminates to prevent
+        # ambiguity with pathspecs
+        return await self._git(repo_dir, ["show", "--stat", commit_hash, "--"])
 
     async def read_file(self, repo_dir: Path, branch: str, subdir: str, path: str) -> str:
         if not _SAFE_REF_RE.match(branch):

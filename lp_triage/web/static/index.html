@@ -785,25 +785,35 @@ function cancelLPAuth() {
 }
 
 // ─── Reload recovery ─────────────────────────────────────────────────────────
-// On load, check localStorage for an in-progress run to recover
+// On load, check localStorage for an in-progress or completed run to recover
 (function init() {
   const savedRunId = localStorage.getItem('lp-triage-run-id');
-  if (savedRunId) {
-    fetch(`/run/${savedRunId}/results`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (!data) { localStorage.removeItem('lp-triage-run-id'); return; }
-        // Replay from NDJSON to rebuild state
-        return fetch(`/run/${savedRunId}/replay`).then(r => r.json());
-      })
-      .then(data => {
-        if (!data) return;
-        data.events.forEach(ev => {
-          handleEvent(ev, savedRunId);
-          if (ev.t === 'run_done') onRunDone(ev);
-        });
+  if (!savedRunId) return;
+
+  fetch(`/run/${savedRunId}/results`)
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data) { localStorage.removeItem('lp-triage-run-id'); return null; }
+      return fetch(`/run/${savedRunId}/replay`).then(r => r.json());
+    })
+    .then(data => {
+      if (!data) return;
+      currentRunId = savedRunId;
+      let runFinished = false;
+      data.events.forEach(ev => {
+        handleEvent(ev, savedRunId);
+        if (ev.t === 'run_done' || ev.t === 'run_stopped') {
+          onRunDone(ev);
+          runFinished = true;
+        }
       });
-  }
+      // If the run is still in progress, reattach to the SSE stream
+      if (!runFinished) {
+        document.getElementById('btn-stop-run').style.display = 'inline-block';
+        document.getElementById('btn-start-run').disabled = true;
+        subscribeSSE(savedRunId);
+      }
+    });
 })();
 </script>
 </body>

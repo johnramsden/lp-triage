@@ -53,7 +53,6 @@ async def run_triage(
     provider: Provider,
     model: str,
     debug: bool = False,
-    lp_login: str = "",
     max_turns: int = 10,
 ) -> AsyncIterator[StreamEvent]:
     all_projects = get_projects(cfg)
@@ -136,7 +135,7 @@ async def run_triage(
                     await q.put(
                         BugProgressEvent(bug_id=bug_id, step="checking for existing comment")
                     )
-                    already = await fetcher.has_existing_ai_comment(bug_id, lp_login)
+                    already = await fetcher.has_existing_ai_comment(bug_id)
                     if not already:
                         if posts_made < max_posts:
                             await q.put(BugProgressEvent(bug_id=bug_id, step="posting comment"))

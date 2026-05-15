@@ -101,7 +101,7 @@ def test_already_commented_false(fetcher):
     mock_lp.bugs.__getitem__ = MagicMock(return_value=bug)
 
     with patch.object(fetcher, "_get_lp_anonymous", return_value=mock_lp):
-        result = fetcher._check_existing_comment(42, "lp-triage-bot")
+        result = fetcher._check_existing_comment(42)
     assert result is False
 
 
@@ -116,7 +116,7 @@ def test_already_commented_true(fetcher):
     mock_lp.bugs.__getitem__ = MagicMock(return_value=bug)
 
     with patch.object(fetcher, "_get_lp_anonymous", return_value=mock_lp):
-        result = fetcher._check_existing_comment(42, "lp-triage-bot")
+        result = fetcher._check_existing_comment(42)
     assert result is True
 
 
