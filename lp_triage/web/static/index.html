@@ -566,69 +566,66 @@ function buildCommentBody(result, bugId) {
   return body.trim();
 }
 
+function _updateQueueMeta() {
+  document.getElementById('queue-count').textContent = `${reviewQueue.length} item${reviewQueue.length===1?'':'s'}`;
+  document.getElementById('review-empty').style.display = reviewQueue.length === 0 ? 'block' : 'none';
+}
+
 function renderReviewQueue() {
   const container = document.getElementById('review-queue');
-  const empty = document.getElementById('review-empty');
-  document.getElementById('queue-count').textContent = `${reviewQueue.length} item${reviewQueue.length===1?'':'s'}`;
+  _updateQueueMeta();
 
-  // Preserve any in-progress edits before wiping the DOM
+  // Only append cards that don't already exist — never touch existing ones so
+  // focus and in-progress edits are never disturbed.
   reviewQueue.forEach(item => {
-    const ta = document.getElementById(`ta-${item.bug_id}`);
-    if (ta) item.comment_body = ta.value;
-  });
-
-  if (reviewQueue.length === 0) {
-    container.innerHTML = '';
-    empty.style.display = 'block';
-    return;
-  }
-  empty.style.display = 'none';
-  container.innerHTML = '';
-
-  reviewQueue.forEach((item, idx) => {
+    if (document.getElementById(`review-${item.bug_id}`)) return;
+    const cat = item.result.category || 'unknown';
     const div = document.createElement('div');
     div.className = 'review-card';
     div.id = `review-${item.bug_id}`;
-    const cat = item.result.category || 'unknown';
     div.innerHTML = `
       <h3><a href="https://bugs.launchpad.net/bugs/${item.bug_id}" target="_blank" style="color:var(--ubuntu-orange)">#${item.bug_id}</a> — ${escHtml(item.title)}</h3>
       <div class="meta"><span class="badge badge-${cat}">${cat}</span> &nbsp; ${escHtml(item.result.summary||'')}</div>
       <textarea id="ta-${item.bug_id}">${escHtml(item.comment_body)}</textarea>
       <div class="review-actions">
-        <button class="btn btn-primary" onclick="approveAndPost(${idx})">Approve &amp; post</button>
-        <button class="btn btn-outline" onclick="skipReview(${idx})">Skip</button>
+        <button class="btn btn-primary" onclick="approveAndPost(${item.bug_id})">Approve &amp; post</button>
+        <button class="btn btn-outline" onclick="skipReview(${item.bug_id})">Skip</button>
       </div>
     `;
     container.appendChild(div);
   });
 }
 
-function approveAndPost(idx) {
-  const item = reviewQueue[idx];
-  const body = document.getElementById(`ta-${item.bug_id}`).value;
-  postComment(item.run_id, item.bug_id, body, idx);
+function _removeCard(bugId) {
+  const idx = reviewQueue.findIndex(i => i.bug_id === bugId);
+  if (idx !== -1) reviewQueue.splice(idx, 1);
+  document.getElementById(`review-${bugId}`)?.remove();
+  _updateQueueMeta();
 }
 
-function skipReview(idx) {
-  reviewQueue.splice(idx, 1);
-  renderReviewQueue();
+function approveAndPost(bugId) {
+  const item = reviewQueue.find(i => i.bug_id === bugId);
+  if (!item) return;
+  const body = document.getElementById(`ta-${bugId}`).value;
+  postComment(item.run_id, bugId, body);
 }
 
-function postComment(runId, bugId, body, idx) {
+function skipReview(bugId) {
+  _removeCard(bugId);
+}
+
+function postComment(runId, bugId, body) {
   fetch(`/run/${runId}/bugs/${bugId}/post`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ comment_body: body, dry_run: document.getElementById('run-dry-run').checked }),
-  }).then(r => r.json()).then(data => {
-    reviewQueue.splice(idx, 1);
-    renderReviewQueue();
+  }).then(r => r.json()).then(() => {
+    _removeCard(bugId);
   }).catch(err => alert('Post failed: ' + err));
 }
 
 function postAll() {
-  // Post all items currently in the summary that have evidence
-  // (simplified: uses the review queue)
-  reviewQueue.slice().forEach((item, idx) => approveAndPost(idx));
+  reviewQueue.slice().forEach(item => approveAndPost(item.bug_id));
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
