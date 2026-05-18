@@ -70,6 +70,7 @@ max_turns     = 10             # agent loop iterations per bug
 bug_list_ttl  = 3600           # LP bug list cache TTL in seconds
 output_dir    = "~/lp-triage-reports"
 cache_dir     = "~/.cache/lp-triage"
+lp_instance   = "production"   # LP instance: production, qastaging, staging
 
 [openrouter]
 model    = "openrouter/auto"

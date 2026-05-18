@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from lp_triage.engine.lp_fetcher import LP_DISCLAIMER, LPFetcher, build_comment_body
+from lp_triage.engine.lp_fetcher import LP_DISCLAIMER, LPFetcher, _clean_text, build_comment_body
 
 
 @pytest.fixture
@@ -134,6 +134,49 @@ def test_build_comment_body_contains_disclaimer():
     assert body.startswith(LP_DISCLAIMER)
     assert "bug" in body
     assert "https://github.com/org/repo/commit/abc123" in body
+
+
+def test_clean_text_expands_bare_sha():
+    sha = "a47da6b0256d4e488ca0ddbccd17c030035881c2"
+    text = f"The fix is in commit {sha} on main."
+    result = _clean_text(text, "https://github.com/org/repo")
+    assert f"https://github.com/org/repo/commit/{sha}" in result
+    assert sha not in result.replace(f"commit/{sha}", "")
+
+
+def test_clean_text_does_not_expand_sha_in_url():
+    sha = "a47da6b0256d4e488ca0ddbccd17c030035881c2"
+    url = f"https://github.com/org/repo/commit/{sha}"
+    result = _clean_text(url, "https://github.com/org/repo")
+    # URL should appear once, not double-expanded
+    assert result.count(sha) == 1
+    assert result.count("commit/commit") == 0
+
+
+def test_clean_text_converts_markdown_links():
+    text = "See [the fix](https://github.com/org/repo/pull/42) for details."
+    result = _clean_text(text, None)
+    assert "[the fix]" not in result
+    assert "the fix (https://github.com/org/repo/pull/42)" in result
+
+
+
+def test_build_comment_body_expands_sha_in_detail():
+    sha = "a47da6b0256d4e488ca0ddbccd17c030035881c2"
+    result = {
+        "schema": 1,
+        "_project_url": "https://github.com/org/repo",
+        "category": "already_fixed",
+        "evidence": [],
+        "summary": "Fixed in main",
+        "recommended_action": "Upgrade",
+        "potential_resolution_detail": f"Commit {sha} resolves this.",
+        "fix_reference": sha,
+    }
+    body = build_comment_body(result, 99)
+    assert f"https://github.com/org/repo/commit/{sha}" in body
+    # bare SHA should not appear outside a URL context
+    assert f"Commit {sha}" not in body
 
 
 def test_post_comment_dry_run_returns_url(fetcher):

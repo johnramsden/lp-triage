@@ -210,12 +210,34 @@
     /* Section header */
     .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
     .section-header h2 { margin: 0; font-size: 1.1rem; }
+    /* Already-posted warning in review cards */
+    .already-posted-notice {
+      background: #3a2800;
+      color: #ffc107;
+      border-radius: 3px;
+      padding: 0.35rem 0.75rem;
+      font-size: 0.82rem;
+      margin-bottom: 0.75rem;
+    }
+    /* LP instance badge */
+    .instance-badge {
+      display: inline-block;
+      padding: 0.18rem 0.55rem;
+      border-radius: 3px;
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      margin-bottom: 1.75rem;
+    }
+    .instance-badge-prod { background: rgba(255,255,255,0.07); color: var(--warm-grey); }
+    .instance-badge-nonprod { background: var(--ubuntu-orange); color: var(--white); }
   </style>
 </head>
 <body>
 <div class="l-application">
   <nav class="l-sidebar">
     <h1 class="logo">lp-triage</h1>
+    <div id="lp-instance-badge" class="instance-badge instance-badge-prod">production</div>
     <a class="nav-link active" data-panel="run" onclick="showPanel('run')">Run</a>
     <a class="nav-link" data-panel="review" onclick="showPanel('review')">Review queue</a>
     <a class="nav-link" data-panel="config" onclick="showPanel('config')">Configuration</a>
@@ -277,6 +299,14 @@
           <div class="field-text">
             <label for="run-dry-run">Dry run</label>
             <span class="field-desc">Go through the full posting flow — check idempotency, build the comment — but skip the actual LP write. Useful for testing without touching Launchpad.</span>
+          </div>
+        </div>
+
+        <div class="run-control-field checkbox-field">
+          <input type="checkbox" id="run-allow-repost" />
+          <div class="field-text">
+            <label for="run-allow-repost">Allow reposting</label>
+            <span class="field-desc">Include bugs that already have an lp-triage comment. They'll appear in the review queue marked as previously posted. Without this, already-commented bugs are skipped entirely.</span>
           </div>
         </div>
       </div>
@@ -361,6 +391,14 @@
           <span id="cfg-gemini-key-status" style="font-size:0.8rem;color:var(--warm-grey)"></span>
         </div>
         <div class="form-row">
+          <label>Launchpad instance</label>
+          <select id="cfg-lp-instance">
+            <option value="production">production</option>
+            <option value="qastaging">qastaging</option>
+            <option value="staging">staging</option>
+          </select>
+        </div>
+        <div class="form-row">
           <label>Default provider</label>
           <select id="cfg-provider">
             <option value="openrouter">OpenRouter</option>
@@ -402,6 +440,7 @@ let reviewQueue = [];    // [{bug_id, title, result, comment_body, run_id}]
 let bugTitles = {};      // bug_id -> title
 let stats = { bugs: 0, posted: 0, errors: 0, tin: 0, tout: 0 };
 let approvedBugs = new Set();
+let _lpWebRoot = 'https://launchpad.net/';
 
 // ─── Panel routing ────────────────────────────────────────────────────────────
 function showPanel(name) {
@@ -421,8 +460,9 @@ function startRun() {
   const maxTurns = document.getElementById('run-max-turns').value;
   const dryRun = document.getElementById('run-dry-run').checked;
   const postComment = document.getElementById('run-post').checked;
+  const allowRepost = document.getElementById('run-allow-repost').checked;
 
-  const body = { provider, dry_run: dryRun, post_comment: postComment };
+  const body = { provider, dry_run: dryRun, post_comment: postComment, allow_repost: allowRepost };
   if (limit) body.limit = parseInt(limit);
   if (maxTurns) body.max_turns = parseInt(maxTurns);
 
@@ -534,10 +574,13 @@ function addSummaryRow(bugId, title, result) {
   const tbody = document.getElementById('summary-tbody');
   const tr = document.createElement('tr');
   const cat = result.category || 'unknown';
+  const repostBadge = result.already_posted
+    ? ' <span class="badge" style="background:#3a2800;color:#ffc107">repost</span>'
+    : '';
   tr.innerHTML = `
-    <td><a href="https://bugs.launchpad.net/bugs/${bugId}" target="_blank" style="color:var(--ubuntu-orange)">#${bugId}</a></td>
+    <td><a href="${_lpWebRoot}bugs/${bugId}" target="_blank" style="color:var(--ubuntu-orange)">#${bugId}</a></td>
     <td>${escHtml(title)}</td>
-    <td><span class="badge badge-${cat}">${cat}</span></td>
+    <td><span class="badge badge-${cat}">${cat}</span>${repostBadge}</td>
     <td>${escHtml(result.importance||'')}</td>
     <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(result.summary||'')}</td>
     <td>${escHtml(result.recommended_action||'')}</td>
@@ -554,16 +597,30 @@ function addToReviewQueue(bugId, title, result, runId) {
   }
 }
 
+function _cleanText(text, projectUrl) {
+  // Markdown links: [text](url) → text (url)
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)');
+  // Bare 40-char SHA not already in a URL path → full commit URL
+  if (projectUrl) {
+    const base = projectUrl.replace(/\/+$/, '');
+    text = text.replace(/(^|[^\/\w])([0-9a-f]{40})(?=[^\/\w]|$)/g,
+      (_, before, sha) => `${before}${base}/commit/${sha}`);
+  }
+  return text;
+}
+
 function buildCommentBody(result, bugId) {
+  const projectUrl = result._project_url || '';
+  function clean(t) { return _cleanText(t || '', projectUrl); }
   const disclaimer = '[lp-triage AI report — informational only; a human must decide final actions]';
   let body = `${disclaimer}\n\n`;
-  body += `**Category**: ${result.category||'unknown'}\n\n`;
-  body += `**Summary**: ${result.summary||''}\n\n`;
-  body += `**Recommended action**: ${result.recommended_action||''}\n\n`;
-  if (result.potential_resolution_detail) body += `**Potential resolution detail**:\n${result.potential_resolution_detail}\n\n`;
-  if (result.fix_reference) body += `**Fix reference**: ${result.fix_reference}\n\n`;
+  body += `Category: ${result.category||'unknown'}\n\n`;
+  body += `Summary: ${clean(result.summary||'')}\n\n`;
+  body += `Recommended action: ${clean(result.recommended_action||'')}\n\n`;
+  if (result.potential_resolution_detail) body += `Potential resolution detail:\n${clean(result.potential_resolution_detail)}\n\n`;
+  if (result.fix_reference) body += `Fix reference: ${clean(result.fix_reference)}\n\n`;
   if ((result.evidence||[]).length) {
-    body += `**Evidence**:\n` + result.evidence.map(u => `- ${u}`).join('\n') + '\n';
+    body += `Evidence:\n` + result.evidence.map(u => `- ${clean(u)}`).join('\n') + '\n';
   }
   return body.trim();
 }
@@ -585,9 +642,13 @@ function renderReviewQueue() {
     const div = document.createElement('div');
     div.className = 'review-card';
     div.id = `review-${item.bug_id}`;
+    const alreadyPostedNotice = item.result.already_posted
+      ? `<div class="already-posted-notice">⚠ This bug already has an lp-triage comment — posting again will add a duplicate.</div>`
+      : '';
     div.innerHTML = `
-      <h3><a href="https://bugs.launchpad.net/bugs/${item.bug_id}" target="_blank" style="color:var(--ubuntu-orange)">#${item.bug_id}</a> — ${escHtml(item.title)}</h3>
+      <h3><a href="${_lpWebRoot}bugs/${item.bug_id}" target="_blank" style="color:var(--ubuntu-orange)">#${item.bug_id}</a> — ${escHtml(item.title)}</h3>
       <div class="meta"><span class="badge badge-${cat}">${cat}</span> &nbsp; ${escHtml(item.result.summary||'')}</div>
+      ${alreadyPostedNotice}
       <textarea id="ta-${item.bug_id}">${escHtml(item.comment_body)}</textarea>
       <div class="review-actions">
         <button class="btn btn-primary" onclick="approveAndPost(${item.bug_id})">Approve &amp; post</button>
@@ -630,6 +691,43 @@ function postAll() {
   reviewQueue.slice().forEach(item => approveAndPost(item.bug_id));
 }
 
+// ─── Status / instance badge ──────────────────────────────────────────────────
+const _lpWebRoots = {
+  production: 'https://launchpad.net/',
+  qastaging:  'https://qastaging.launchpad.net/',
+  staging:    'https://staging.launchpad.net/',
+};
+
+function loadStatus() {
+  fetch('/status').then(r => r.json()).then(({ lp_instance, lp_connected }) => {
+    setInstanceBadge(lp_instance || 'production');
+    setLPConnected(!!lp_connected);
+  });
+}
+
+function setLPConnected(connected) {
+  const status = document.getElementById('lp-status');
+  const btn = document.getElementById('btn-lp-connect');
+  if (connected) {
+    status.textContent = 'Launchpad: connected';
+    status.style.color = '#0e8420';
+    btn.textContent = 'Reconnect';
+  } else {
+    status.textContent = 'Launchpad: not connected';
+    status.style.color = '';
+    btn.textContent = 'Connect Launchpad';
+  }
+  btn.style.display = '';
+  btn.disabled = false;
+}
+
+function setInstanceBadge(instance) {
+  _lpWebRoot = _lpWebRoots[instance] || `https://${instance}.launchpad.net/`;
+  const el = document.getElementById('lp-instance-badge');
+  el.textContent = instance;
+  el.className = 'instance-badge ' + (instance === 'production' ? 'instance-badge-prod' : 'instance-badge-nonprod');
+}
+
 // ─── Config ───────────────────────────────────────────────────────────────────
 let _projectsData = [];
 
@@ -637,6 +735,7 @@ function loadConfig() {
   fetch('/config').then(r => r.json()).then(({ user, project }) => {
     document.getElementById('cfg-or-key').value = user?.auth?.openrouter_api_key || '';
     document.getElementById('cfg-gemini-key').value = user?.auth?.gemini_api_key || '';
+    document.getElementById('cfg-lp-instance').value = user?.defaults?.lp_instance || 'production';
     document.getElementById('cfg-provider').value = user?.defaults?.provider || 'openrouter';
     document.getElementById('cfg-or-model').value = user?.openrouter?.model || '';
     document.getElementById('cfg-gemini-model').value = user?.gemini?.model || '';
@@ -699,7 +798,10 @@ function saveConfig() {
       openrouter_api_key: orKey || '__unchanged__',
       gemini_api_key: gmKey || '__unchanged__',
     },
-    defaults: { provider: document.getElementById('cfg-provider').value },
+    defaults: {
+      provider: document.getElementById('cfg-provider').value,
+      lp_instance: document.getElementById('cfg-lp-instance').value,
+    },
     openrouter: { model: document.getElementById('cfg-or-model').value },
     gemini: { model: document.getElementById('cfg-gemini-model').value },
   };
@@ -711,6 +813,7 @@ function saveConfig() {
   }).then(() => {
     btn.textContent = 'Saved!';
     setTimeout(() => { btn.textContent = 'Save'; }, 1500);
+    setInstanceBadge(user.defaults.lp_instance);
   });
 }
 
@@ -761,13 +864,7 @@ async function completeLPAuth() {
     if (!resp.ok || !data.ok) throw new Error(data.error || 'Unknown error');
     _lpTokenKey = null;
     document.getElementById('lp-pending').style.display = 'none';
-    const status = document.getElementById('lp-status');
-    status.textContent = 'Launchpad: connected';
-    status.style.color = '#0e8420';
-    const btn = document.getElementById('btn-lp-connect');
-    btn.style.display = '';
-    btn.disabled = false;
-    btn.textContent = 'Reconnect';
+    loadStatus();
   } catch (e) {
     completeBtn.disabled = false;
     completeBtn.textContent = 'Complete authorization';
@@ -787,6 +884,7 @@ function cancelLPAuth() {
 // ─── Reload recovery ─────────────────────────────────────────────────────────
 // On load, check localStorage for an in-progress or completed run to recover
 (function init() {
+  loadStatus();
   const savedRunId = localStorage.getItem('lp-triage-run-id');
   if (!savedRunId) return;
 

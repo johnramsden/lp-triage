@@ -30,6 +30,7 @@ _DEFAULTS: dict[str, Any] = {
         "bug_list_ttl": 3600,
         "concurrency": 4,
         "max_turns": 10,
+        "lp_instance": "production",
     },
     "openrouter": {
         "model": "openrouter/auto",

@@ -16,7 +16,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
-from ..engine.config import load_config, load_project_config, load_user_config, save_project_config, save_user_config
+from ..engine.config import _deep_merge, load_config, load_project_config, load_user_config, save_project_config, save_user_config
 from ..engine.events import ClassificationEvent, RunDoneEvent, StreamEvent, to_ndjson
 from ..engine.run import run_triage
 
@@ -114,6 +114,16 @@ def create_app(initial_cfg: dict | None = None) -> FastAPI:
 
     _SENTINEL_KEY = "__unchanged__"
 
+    @app.get("/status")
+    async def get_status() -> JSONResponse:
+        cfg = load_config()
+        creds_file = cfg.get("auth", {}).get("lp_credentials_file", "")
+        lp_connected = bool(creds_file and Path(creds_file).expanduser().exists())
+        return JSONResponse({
+            "lp_instance": cfg["defaults"].get("lp_instance", "production"),
+            "lp_connected": lp_connected,
+        })
+
     @app.get("/config")
     async def get_config() -> JSONResponse:
         user = load_user_config()
@@ -137,7 +147,8 @@ def create_app(initial_cfg: dict | None = None) -> FastAPI:
                     new_user.setdefault("auth", {})[key] = (
                         existing_user.get("auth", {}).get(key, "")
                     )
-            save_user_config(new_user)
+            # Merge onto existing so keys not shown in the UI are preserved
+            save_user_config(_deep_merge(existing_user, new_user))
         if "project" in body:
             save_project_config(body["project"])
         return JSONResponse({"ok": True})
@@ -175,6 +186,7 @@ def create_app(initial_cfg: dict | None = None) -> FastAPI:
                 limit=body.get("limit"),
                 refresh=body.get("refresh", False),
                 post_comment=body.get("post_comment", False),
+                allow_repost=body.get("allow_repost", False),
                 dry_run=body.get("dry_run", False),
                 max_posts=body.get("max_posts", 20),
                 concurrency=body.get("concurrency", 4),
@@ -260,6 +272,7 @@ def create_app(initial_cfg: dict | None = None) -> FastAPI:
         fetcher = LPFetcher(
             cache_dir=Path(cfg["defaults"]["cache_dir"]).expanduser(),
             lp_credentials_file=cfg.get("auth", {}).get("lp_credentials_file"),
+            lp_instance=cfg["defaults"].get("lp_instance", "production"),
         )
 
         comment_body = comment_body_override or build_comment_body(result, bug_id)
@@ -276,7 +289,8 @@ def create_app(initial_cfg: dict | None = None) -> FastAPI:
         """Get LP request token and authorization URL (OOB desktop flow)."""
         from ..engine.lp_auth import get_request_token
 
-        auth_url, token_key, token_secret = await asyncio.to_thread(get_request_token)
+        lp_instance = load_config()["defaults"].get("lp_instance", "production")
+        auth_url, token_key, token_secret = await asyncio.to_thread(get_request_token, lp_instance)
         _pending_oauth[token_key] = token_secret
         return JSONResponse({"auth_url": auth_url, "token_key": token_key})
 
@@ -295,7 +309,8 @@ def create_app(initial_cfg: dict | None = None) -> FastAPI:
                 status_code=400,
             )
         success = await asyncio.to_thread(
-            exchange_token, cfg, token_key, token_secret, ""
+            exchange_token, cfg, token_key, token_secret, "",
+            cfg["defaults"].get("lp_instance", "production"),
         )
         if success:
             return JSONResponse({"ok": True})

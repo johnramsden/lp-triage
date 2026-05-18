@@ -20,11 +20,19 @@ The detail cache is keyed on `(bug_id, date_last_updated)` so stale entries
 are naturally invalidated when LP reports a newer modification timestamp.
 `--refresh` bypasses the bug list cache but not the detail cache.
 
+## Constructor parameters
+
+`LPFetcher(cache_dir, bug_list_ttl=3600, refresh=False, lp_credentials_file=None, lp_instance="production")`
+
+`lp_instance` is passed to every launchpadlib call (`login_anonymously`,
+`login_with`) and used to derive the bug URL base for dry runs. Valid values
+are any name launchpadlib recognises: `production`, `qastaging`, `staging`.
+
 ## Comment posting
 
 `post_comment(bug_id, body, dry_run=False)`:
 
-- `dry_run=True` — returns the bug URL without making any LP API call.
+- `dry_run=True` — returns the bug URL (derived from `lp_instance`) without making any LP API call.
 - `dry_run=False` — uses launchpadlib (`Credentials.load_from_path`) to post
   the comment and returns the message URL.
 

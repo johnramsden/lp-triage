@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,7 +19,22 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-LP_API = "https://api.launchpad.net/1.0"
+# Matches a bare 40-char git SHA not already embedded in a URL path (i.e. not preceded by /)
+_SHA_RE = re.compile(r'(?<![/\w])([0-9a-f]{40})(?![/\w])')
+# Matches Markdown links: [text](url)
+_MD_LINK_RE = re.compile(r'\[([^\]]+)\]\(([^)]+)\)')
+
+
+def _clean_text(text: str, project_url: str | None) -> str:
+    """Convert markdown links to plain text and expand bare SHAs to full URLs."""
+    # [text](url) → text (url) — Launchpad auto-links bare URLs, not markdown syntax
+    text = _MD_LINK_RE.sub(r'\1 (\2)', text)
+    # Bare 40-char SHAs not already inside a URL path → full commit URL
+    if project_url:
+        base = project_url.rstrip('/')
+        text = _SHA_RE.sub(lambda m: f"{base}/commit/{m.group(1)}", text)
+    return text
+
 LP_DISCLAIMER = "[lp-triage AI report — informational only; a human must decide final actions]"
 
 ACTIVE_STATUSES = [
@@ -38,12 +54,14 @@ class LPFetcher:
         bug_list_ttl: int = 3600,
         refresh: bool = False,
         lp_credentials_file: str | None = None,
+        lp_instance: str = "production",
     ):
         self._cache_dir = cache_dir / "lp"
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         self._bug_list_ttl = bug_list_ttl
         self._refresh = refresh
         self._lp_credentials_file = lp_credentials_file
+        self._lp_instance = lp_instance
         self._lp: Any = None  # launchpadlib Launchpad instance (authenticated)
 
     # ------------------------------------------------------------------ public
@@ -73,7 +91,9 @@ class LPFetcher:
 
     async def post_comment(self, bug_id: int, body: str, dry_run: bool = False) -> str:
         if dry_run:
-            url = f"https://bugs.launchpad.net/bugs/{bug_id}"
+            from launchpadlib.uris import lookup_web_root
+            web_root = lookup_web_root(self._lp_instance).rstrip("/")
+            url = f"{web_root}/bugs/{bug_id}"
             logger.info("[dry-run] would post comment to bug %d", bug_id)
             return url
         return await asyncio.to_thread(self._do_post_comment, bug_id, body)
@@ -127,7 +147,7 @@ class LPFetcher:
 
         return Launchpad.login_anonymously(
             "lp-triage",
-            "production",
+            self._lp_instance,
             launchpadlib_dir=str(self._cache_dir / "launchpadlib"),
             version="devel",
         )
@@ -141,7 +161,7 @@ class LPFetcher:
         if creds and Path(creds).exists():
             self._lp = Launchpad.login_with(
                 "lp-triage",
-                "production",
+                self._lp_instance,
                 credentials_file=creds,
                 launchpadlib_dir=str(self._cache_dir / "launchpadlib"),
                 version="devel",
@@ -219,28 +239,33 @@ class LPFetcher:
 
 
 def build_comment_body(result: dict, bug_id: int) -> str:
+    project_url: str | None = result.get("_project_url") or None
+
+    def clean(text: str) -> str:
+        return _clean_text(text, project_url)
+
     lines = [
         LP_DISCLAIMER,
         "",
-        f"**Category**: {result.get('category', 'unknown')}",
+        f"Category: {result.get('category', 'unknown')}",
         "",
-        f"**Summary**: {result.get('summary', '')}",
+        f"Summary: {clean(result.get('summary', ''))}",
         "",
-        f"**Recommended action**: {result.get('recommended_action', '')}",
+        f"Recommended action: {clean(result.get('recommended_action', ''))}",
         "",
     ]
     if result.get("potential_resolution_detail"):
         lines += [
-            "**Potential resolution detail**:",
-            result["potential_resolution_detail"],
+            "Potential resolution detail:",
+            clean(result["potential_resolution_detail"]),
             "",
         ]
     if result.get("fix_reference"):
-        lines += [f"**Fix reference**: {result['fix_reference']}", ""]
+        lines += [f"Fix reference: {clean(result['fix_reference'])}", ""]
     evidence = result.get("evidence", [])
     if evidence:
-        lines.append("**Evidence**:")
+        lines.append("Evidence:")
         for url in evidence:
-            lines.append(f"- {url}")
+            lines.append(f"- {clean(url)}")
         lines.append("")
     return "\n".join(lines).strip()

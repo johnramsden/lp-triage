@@ -13,6 +13,20 @@ Merge order (highest wins): env vars → `lp-triage.toml` → `~/.config/…/con
 
 Env vars recognised: `OPENROUTER_API_KEY`, `GEMINI_API_KEY`.
 
+## `defaults` keys
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `provider` | `"openrouter"` | AI provider (`openrouter` or `gemini`) |
+| `concurrency` | `4` | Parallel bugs per project |
+| `max_turns` | `10` | Agent loop iterations per bug |
+| `bug_list_ttl` | `3600` | LP bug list cache TTL in seconds |
+| `output_dir` | `~/lp-triage-reports` | Report output directory |
+| `cache_dir` | `~/.cache/lp-triage` | Cache and launchpadlib data directory |
+| `lp_instance` | `"production"` | Launchpad instance (`production`, `qastaging`, `staging`) |
+
+`lp_instance` is passed verbatim to launchpadlib, which maps it to the correct service and web roots. Setting it to `"qastaging"` routes all LP API calls and OAuth flows to `https://qastaging.launchpad.net/`.
+
 ## Project schema
 
 ```toml

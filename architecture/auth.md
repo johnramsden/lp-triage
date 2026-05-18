@@ -26,9 +26,10 @@ redirect back to a callback URL for unregistered consumers.
       → credentials saved to disk
 ```
 
-## `get_request_token(cfg)`
+## `get_request_token(lp_instance="production")`
 
-POSTs to `https://launchpad.net/+request-token` via httplib2 with:
+Resolves the web root for `lp_instance` via `launchpadlib.uris.lookup_web_root`,
+then POSTs to `{web_root}+request-token` via httpx with:
 
 ```
 oauth_consumer_key   = lp-triage
@@ -41,11 +42,11 @@ Returns `(auth_url, token_key, token_secret)`. `token_secret` is stored in
 `_pending_oauth[token_key]` in the server's memory until the user completes
 the flow.
 
-## `exchange_token(cfg, oauth_token, oauth_token_secret, oauth_verifier)`
+## `exchange_token(cfg, oauth_token, oauth_token_secret, oauth_verifier, lp_instance="production")`
 
-POSTs to `https://launchpad.net/+access-token`. For the OOB flow,
-`oauth_verifier` is passed as `""` and is omitted from the request. LP accepts
-this because the request token was blessed by the user on LP's website.
+POSTs to `{web_root}+access-token` for the resolved instance. For the OOB
+flow, `oauth_verifier` is passed as `""` and is omitted from the request. LP
+accepts this because the request token was blessed by the user on LP's website.
 
 ## Credential storage
 
@@ -64,9 +65,9 @@ access_secret = <secret>
 directly, so `LPFetcher` can authenticate without re-implementing the
 credential loading logic.
 
-## Why httplib2, not launchpadlib
+## Why httpx, not launchpadlib
 
 launchpadlib's built-in `get_request_token()` does not send `oauth_callback`
 at all, making it impossible to use the web flow even for registered
-consumers. We call the LP REST endpoint directly with httplib2 to have full
+consumers. We call the LP REST endpoint directly with httpx to have full
 control over the request parameters.

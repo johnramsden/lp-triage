@@ -17,15 +17,16 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-_LP_ROOT = "https://launchpad.net/"
-_REQUEST_TOKEN_URL = _LP_ROOT + "+request-token"
-_ACCESS_TOKEN_URL = _LP_ROOT + "+access-token"
-_AUTHORIZE_URL = _LP_ROOT + "+authorize-token"
 _CONSUMER_KEY = "lp-triage"
 _TIMEOUT = 15  # seconds
 
 
-def _lp_post(url: str, params: dict) -> dict:
+def _web_root(lp_instance: str) -> str:
+    from launchpadlib.uris import lookup_web_root
+    return lookup_web_root(lp_instance)
+
+
+def _lp_post(url: str, params: dict, lp_root: str) -> dict:
     """POST url-encoded params to LP, return parsed response as dict."""
     body = urlparse.urlencode(params)
     with httpx.Client(timeout=_TIMEOUT) as client:
@@ -33,7 +34,7 @@ def _lp_post(url: str, params: dict) -> dict:
             url,
             content=body,
             headers={
-                "Referer": _LP_ROOT,
+                "Referer": lp_root,
                 "Content-Type": "application/x-www-form-urlencoded",
             },
         )
@@ -44,17 +45,18 @@ def _lp_post(url: str, params: dict) -> dict:
     return dict(urlparse.parse_qsl(resp.text))
 
 
-def get_request_token() -> tuple[str, str, str]:
+def get_request_token(lp_instance: str = "production") -> tuple[str, str, str]:
     """Return (auth_url, token_key, token_secret) using OOB desktop flow."""
-    data = _lp_post(_REQUEST_TOKEN_URL, {
+    lp_root = _web_root(lp_instance)
+    data = _lp_post(lp_root + "+request-token", {
         "oauth_consumer_key": _CONSUMER_KEY,
         "oauth_signature_method": "PLAINTEXT",
         "oauth_signature": "&",
         "oauth_callback": "oob",
-    })
+    }, lp_root)
     token_key = data["oauth_token"]
     token_secret = data["oauth_token_secret"]
-    auth_url = f"{_AUTHORIZE_URL}?oauth_token={urlparse.quote(token_key)}"
+    auth_url = f"{lp_root}+authorize-token?oauth_token={urlparse.quote(token_key)}"
     return auth_url, token_key, token_secret
 
 
@@ -63,9 +65,11 @@ def exchange_token(
     oauth_token: str,
     oauth_token_secret: str,
     oauth_verifier: str,
+    lp_instance: str = "production",
 ) -> bool:
     """Exchange the authorized request token for an access token and save credentials."""
     try:
+        lp_root = _web_root(lp_instance)
         params: dict = {
             "oauth_consumer_key": _CONSUMER_KEY,
             "oauth_signature_method": "PLAINTEXT",
@@ -75,7 +79,7 @@ def exchange_token(
         if oauth_verifier:
             params["oauth_verifier"] = oauth_verifier
 
-        data = _lp_post(_ACCESS_TOKEN_URL, params)
+        data = _lp_post(lp_root + "+access-token", params, lp_root)
         access_token = data["oauth_token"]
         access_secret = data["oauth_token_secret"]
 

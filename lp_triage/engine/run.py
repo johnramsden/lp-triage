@@ -47,6 +47,7 @@ async def run_triage(
     limit: int | None = None,
     refresh: bool = False,
     post_comment: bool = False,
+    allow_repost: bool = False,
     dry_run: bool = False,
     max_posts: int = 20,
     concurrency: int = 4,
@@ -69,6 +70,7 @@ async def run_triage(
         bug_list_ttl=cfg["defaults"].get("bug_list_ttl", 3600),
         refresh=refresh,
         lp_credentials_file=cfg.get("auth", {}).get("lp_credentials_file"),
+        lp_instance=cfg["defaults"].get("lp_instance", "production"),
     )
 
     project_names = [p.lp_project for p in all_projects]
@@ -115,28 +117,36 @@ async def run_triage(
                 bug_detail.setdefault("status", bug_summary.get("status"))
                 bug_detail.setdefault("importance", bug_summary.get("importance"))
 
-                await q.put(BugProgressEvent(bug_id=bug_id, step="gathering context"))
+                # Always check for an existing comment so the review queue
+                # can mark already-posted bugs regardless of post_comment.
+                # Only skip classification entirely when auto-posting with
+                # repost disabled, to avoid burning AI tokens on bugs we'd drop.
+                await q.put(
+                    BugProgressEvent(bug_id=bug_id, step="checking for existing comment")
+                )
+                already_posted = await fetcher.has_existing_ai_comment(bug_id)
+                skip = post_comment and already_posted and not allow_repost
 
-                classification_result: dict | None = None
-                async for ev in classify_bug(
-                    bug_detail, project, repo_manager, provider, model,
-                    debug=debug, max_turns=max_turns,
-                ):
-                    await q.put(ev)
-                    if isinstance(ev, ClassificationEvent):
-                        classification_result = ev.result
+                if not skip:
+                    await q.put(BugProgressEvent(bug_id=bug_id, step="gathering context"))
 
-                nonlocal posts_made
-                if (
-                    classification_result
-                    and post_comment
-                    and classification_result.get("evidence")
-                ):
-                    await q.put(
-                        BugProgressEvent(bug_id=bug_id, step="checking for existing comment")
-                    )
-                    already = await fetcher.has_existing_ai_comment(bug_id)
-                    if not already:
+                    classification_result: dict | None = None
+                    async for ev in classify_bug(
+                        bug_detail, project, repo_manager, provider, model,
+                        debug=debug, max_turns=max_turns,
+                    ):
+                        if isinstance(ev, ClassificationEvent) and already_posted:
+                            ev.result["already_posted"] = True
+                        await q.put(ev)
+                        if isinstance(ev, ClassificationEvent):
+                            classification_result = ev.result
+
+                    nonlocal posts_made
+                    if (
+                        classification_result
+                        and post_comment
+                        and classification_result.get("evidence")
+                    ):
                         if posts_made < max_posts:
                             await q.put(BugProgressEvent(bug_id=bug_id, step="posting comment"))
                             body = build_comment_body(classification_result, bug_id)

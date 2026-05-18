@@ -55,7 +55,12 @@ _CLASSIFY_TOOL = {
                 "evidence": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "GitHub commit or PR URLs supporting the classification",
+                    "description": (
+                        "Full GitHub commit or PR URLs supporting the classification, "
+                        "e.g. https://github.com/org/repo/commit/<full-sha> or "
+                        "https://github.com/org/repo/pull/<number>. "
+                        "Never use bare commit hashes — always construct the full URL."
+                    ),
                 },
                 "summary": {
                     "type": "string",
@@ -172,6 +177,11 @@ For any other classification, evidence should list supporting commit/PR URLs if 
 If you find no supporting evidence, leave evidence empty and avoid posting (the posting gate
 will prevent it).
 
+URL format: whenever you cite a commit, always use the full URL:
+  {repo}/commit/<full-40-char-sha>
+Never include bare commit hashes — always expand them to full URLs.
+All text fields are posted as plain text to Launchpad; do not use Markdown link syntax [text](url).
+
 Be thorough but efficient: check the recent git log first, then dive into specific commits
 or files as needed. Do not fabricate commit hashes or URLs."""
 
@@ -274,7 +284,7 @@ async def classify_bug(
 
         for tc in tool_calls_this_turn:
             if tc.name == "classify_bug":
-                classification = {**tc.arguments, "schema": 1}
+                classification = {**tc.arguments, "schema": 1, "_project_url": project.url}
                 messages.append(
                     {
                         "role": "tool",
