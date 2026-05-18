@@ -1,0 +1,67 @@
+[defaults]
+lp_instance = "qastaging"
+provider = "openrouter"
+
+[auth]
+openrouter_api_key = "sk-or-v1-..."
+gemini_api_key = ""
+
+[openrouter]
+model = "openrouter/free"
+
+[gemini]
+model = ""
+
+[[projects]]
+lp_project = "charm-ceph-dashboard"
+url = "https://github.com/canonical/ceph-charms"
+branch = "main"
+subdir = "ceph-dashboard"
+
+[[projects]]
+lp_project = "charm-ceph-fs"
+url = "https://github.com/canonical/ceph-charms"
+branch = "main"
+subdir = "ceph-fs"
+
+[[projects]]
+lp_project = "charm-ceph-iscsi"
+url = "https://github.com/canonical/ceph-charms"
+branch = "stable/quincy.2"
+subdir = "ceph-iscsi"
+
+[[projects]]
+lp_project = "charm-ceph-mon"
+url = "https://github.com/canonical/ceph-charms"
+branch = "main"
+subdir = "ceph-mon"
+
+[[projects]]
+lp_project = "charm-ceph-nfs"
+url = "https://github.com/canonical/ceph-charms"
+branch = "main"
+subdir = "ceph-nfs"
+
+[[projects]]
+lp_project = "charm-ceph-osd"
+url = "https://github.com/canonical/ceph-charms"
+branch = "main"
+subdir = "ceph-osd"
+
+[[projects]]
+lp_project = "charm-ceph-proxy"
+url = "https://github.com/canonical/ceph-charms"
+branch = "main"
+subdir = "ceph-proxy"
+
+[[projects]]
+lp_project = "charm-ceph-radosgw"
+url = "https://github.com/canonical/ceph-charms"
+branch = "main"
+subdir = "ceph-radosgw"
+
+[[projects]]
+lp_project = "charm-ceph-rbd-mirror"
+url = "https://github.com/canonical/ceph-charms"
+branch = "main"
+subdir = "ceph-rbd-mirror"
