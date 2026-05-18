@@ -3,8 +3,9 @@
 **File:** `lp_triage/engine/events.py`
 
 Every triage run is modelled as an ordered stream of typed events. The CLI
-writes them as NDJSON; the web server fans them through an `asyncio.Queue` to
-SSE subscribers and also writes the same NDJSON to disk.
+writes them as NDJSON to stdout (and to a timestamped log file in the current
+working directory); the web server fans them through an `asyncio.Queue` to SSE
+subscribers and appends each event to an in-memory list for replay.
 
 ## Event types
 
@@ -40,8 +41,9 @@ plain dict; `to_ndjson(event)` serialises it to a single JSON line.
 
 `evidence` being non-empty is the gate for comment posting.
 
-## NDJSON log
+## CLI NDJSON log
 
-Each run writes a timestamped NDJSON file to `output_dir`
-(`~/lp-triage-reports/run-<ts>.ndjson` by default). The web server replays
-this file to reconnecting browsers via `GET /run/{id}/replay`.
+Each CLI run writes a timestamped NDJSON file (`run-<ts>.ndjson`) and a
+plain-text summary (`run-<ts>-summary.txt`) to the current working directory.
+The web server does not write any files; replay comes from the in-memory event
+list via `GET /run/{id}/replay`.

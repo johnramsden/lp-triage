@@ -11,7 +11,7 @@ same data path.
 lp_triage/
   cli.py               — Typer entry point; drives run_triage(), writes NDJSON log
   engine/
-    config.py          — Two-file TOML config, typed dataclasses, atomic writes
+    config.py          — Single TOML config file, typed dataclasses, atomic writes
     events.py          — All stream event types and NDJSON serialisation
     run.py             — Orchestration: clone repos, schedule bugs, aggregate stats
     agent_loop.py      — Agentic tool-use loop for a single bug
@@ -24,7 +24,10 @@ lp_triage/
       gemini_provider.py  — Google Gemini (google-genai SDK)
   web/
     server.py          — FastAPI app: REST endpoints, SSE stream, OAuth routes
-    static/index.html  — Single-page UI (vanilla JS, HTMX, Vanilla Framework CSS)
+    static/
+      index.html       — Single-page UI shell (markup only)
+      app.js           — All UI logic (vanilla JS, no build step)
+      style.css        — Custom styles (Vanilla Framework + overrides)
 ```
 
 Detailed write-ups for each subsystem live alongside this file:
@@ -63,6 +66,6 @@ run_triage()                         ← async generator, yields StreamEvents
 ```
 
 The web server wraps `run_triage()` in an `asyncio.Task`, fans events into a
-per-run `asyncio.Queue`, and serves them to the browser over SSE. The same
-events are written to an NDJSON file on disk so the browser can replay them
-after a page reload.
+per-run `asyncio.Queue`, and serves them to the browser over SSE. All emitted
+events are also appended to an in-memory list so new SSE subscribers (and page
+reloads) can replay the full history without touching disk.

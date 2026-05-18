@@ -31,7 +31,10 @@ absolute paths, no `..` escapes).
    `ToolCall` events.
 4. Execute any tool calls, append results as a `tool` role message.
 5. If `classify_bug` was called, add `"schema": 1` to the result, yield a
-   `ClassificationEvent`, and return.
+   `ClassificationEvent`, and return. Before the event is yielded, `run.py`
+   stamps two extra fields onto `result`: `"importance"` (from the LP bug
+   summary) and, when `allow_repost=True` and the bug already has an lp-triage
+   comment, `"already_posted": True`.
 6. If `max_turns` is reached without a `classify_bug` call, yield a
    `BugErrorEvent` with message `"exceeded max turns (N) without classify_bug
    call"`.
