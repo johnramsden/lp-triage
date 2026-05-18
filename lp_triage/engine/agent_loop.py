@@ -294,7 +294,7 @@ async def classify_bug(
                     }
                 )
             else:
-                result = await _dispatch_tool(tc, repo_dir, project)
+                result = await _dispatch_tool(tc, repo_dir, project, repo_manager)
                 if len(result) > _MAX_TOOL_OUTPUT:
                     result = result[:_MAX_TOOL_OUTPUT] + f"\n[truncated — output exceeded {_MAX_TOOL_OUTPUT // 1024} KiB]"
                 messages.append(
@@ -316,22 +316,19 @@ async def classify_bug(
         yield BugErrorEvent(bug_id=bug_id, error="exceeded max turns without classification")
 
 
-async def _dispatch_tool(tc: ToolCall, repo_dir: Path, project: ProjectCfg) -> str:
+async def _dispatch_tool(tc: ToolCall, repo_dir: Path, project: ProjectCfg, repo_manager: RepoManager) -> str:
     from .repo_manager import RepoError
 
     try:
         if tc.name == "get_log":
             n = min(int(tc.arguments.get("n", 20)), 50)
-            rm = RepoManager(repo_dir.parent.parent)
-            return await rm.get_log(repo_dir, project.branch, project.subdir, n)
+            return await repo_manager.get_log(repo_dir, project.branch, project.subdir, n)
         elif tc.name == "get_commit":
             h = str(tc.arguments.get("hash", ""))
-            rm = RepoManager(repo_dir.parent.parent)
-            return await rm.get_commit(repo_dir, h)
+            return await repo_manager.get_commit(repo_dir, h)
         elif tc.name == "read_file":
             p = str(tc.arguments.get("path", ""))
-            rm = RepoManager(repo_dir.parent.parent)
-            return await rm.read_file(repo_dir, project.branch, project.subdir, p)
+            return await repo_manager.read_file(repo_dir, project.branch, project.subdir, p)
         else:
             return f"unknown tool: {tc.name}"
     except RepoError as e:

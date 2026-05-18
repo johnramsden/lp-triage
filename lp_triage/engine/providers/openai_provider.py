@@ -59,7 +59,8 @@ class OpenAIProvider:
                                 buf["args"] += tc.function.arguments
 
                 if finish == "tool_calls":
-                    for buf in sorted(tool_bufs.values(), key=lambda b: b["id"]):
+                    for idx in sorted(tool_bufs):
+                        buf = tool_bufs[idx]
                         try:
                             args = json.loads(buf["args"]) if buf["args"] else {}
                         except json.JSONDecodeError:

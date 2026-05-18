@@ -73,7 +73,7 @@ class RunStore:
         run = self._runs.get(run_id)
         if run is None:
             return None
-        return {"results": run["results"], "stats": run.get("stats")}
+        return {"results": run["results"], "stats": run.get("stats"), "status": run["status"]}
 
     def get_bug_result(self, run_id: str, bug_id: int) -> dict | None:
         run = self._runs.get(run_id)
@@ -104,7 +104,7 @@ _store = RunStore()
 _pending_oauth: dict[str, str] = {}  # token_key -> token_secret
 
 
-def create_app(initial_cfg: dict | None = None) -> FastAPI:
+def create_app() -> FastAPI:
     app = FastAPI(title="lp-triage")
 
     @app.get("/", response_class=HTMLResponse)
@@ -180,21 +180,30 @@ def create_app(initial_cfg: dict | None = None) -> FastAPI:
         default_max_turns = cfg["defaults"].get("max_turns", 10)
 
         async def _bg() -> None:
-            async for event in run_triage(
-                cfg,
-                projects_filter=body.get("projects"),
-                limit=body.get("limit"),
-                refresh=body.get("refresh", False),
-                post_comment=body.get("post_comment", False),
-                allow_repost=body.get("allow_repost", False),
-                dry_run=body.get("dry_run", False),
-                max_posts=body.get("max_posts", 20),
-                concurrency=body.get("concurrency", 4),
-                provider=prov,
-                model=resolved_model,
-                max_turns=body.get("max_turns", default_max_turns),
-            ):
-                _store.append_event(run_id, event)
+            try:
+                async for event in run_triage(
+                    cfg,
+                    projects_filter=body.get("projects"),
+                    limit=body.get("limit"),
+                    refresh=body.get("refresh", False),
+                    post_comment=body.get("post_comment", False),
+                    allow_repost=body.get("allow_repost", False),
+                    dry_run=body.get("dry_run", False),
+                    max_posts=body.get("max_posts", 20),
+                    concurrency=body.get("concurrency", 4),
+                    provider=prov,
+                    model=resolved_model,
+                    max_turns=body.get("max_turns", default_max_turns),
+                ):
+                    _store.append_event(run_id, event)
+            except asyncio.CancelledError:
+                # Write terminal event to NDJSON so replay shows the run as stopped.
+                run = _store.get(run_id)
+                if run:
+                    stopped = {"t": "run_stopped", "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+                    with open(run["ndjson_path"], "a") as f:
+                        f.write(json.dumps(stopped) + "\n")
+                raise
 
         task = asyncio.create_task(_bg())
         _store.set_task(run_id, task)
@@ -274,6 +283,14 @@ def create_app(initial_cfg: dict | None = None) -> FastAPI:
             lp_credentials_file=cfg.get("auth", {}).get("lp_credentials_file"),
             lp_instance=cfg["defaults"].get("lp_instance", "production"),
         )
+
+        if not dry_run:
+            already = await fetcher.has_existing_ai_comment(bug_id)
+            if already:
+                return JSONResponse(
+                    {"ok": False, "error": "Bug already has an lp-triage comment"},
+                    status_code=409,
+                )
 
         comment_body = comment_body_override or build_comment_body(result, bug_id)
         url = await fetcher.post_comment(bug_id, comment_body, dry_run=dry_run)

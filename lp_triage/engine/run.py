@@ -135,8 +135,10 @@ async def run_triage(
                         bug_detail, project, repo_manager, provider, model,
                         debug=debug, max_turns=max_turns,
                     ):
-                        if isinstance(ev, ClassificationEvent) and already_posted:
-                            ev.result["already_posted"] = True
+                        if isinstance(ev, ClassificationEvent):
+                            ev.result.setdefault("importance", bug_summary.get("importance", ""))
+                            if already_posted:
+                                ev.result["already_posted"] = True
                         await q.put(ev)
                         if isinstance(ev, ClassificationEvent):
                             classification_result = ev.result
@@ -148,11 +150,17 @@ async def run_triage(
                         and classification_result.get("evidence")
                     ):
                         if posts_made < max_posts:
-                            await q.put(BugProgressEvent(bug_id=bug_id, step="posting comment"))
-                            body = build_comment_body(classification_result, bug_id)
-                            url = await fetcher.post_comment(bug_id, body, dry_run=dry_run)
+                            # Reserve slot before the network call to prevent
+                            # concurrent coroutines from exceeding max_posts.
                             posts_made += 1
-                            await q.put(CommentPostedEvent(bug_id=bug_id, url=url))
+                            try:
+                                await q.put(BugProgressEvent(bug_id=bug_id, step="posting comment"))
+                                body = build_comment_body(classification_result, bug_id)
+                                url = await fetcher.post_comment(bug_id, body, dry_run=dry_run)
+                                await q.put(CommentPostedEvent(bug_id=bug_id, url=url))
+                            except Exception:
+                                posts_made -= 1
+                                raise
                         else:
                             stats["posts_skipped_cap"] += 1
 
@@ -166,12 +174,11 @@ async def run_triage(
         yield ProjectStartEvent(project=project.lp_project)
 
         bugs = await fetcher.get_active_bugs(project.lp_project)
-        if limit:
-            bugs = bugs[:limit]
-
         bugs_sorted = sorted(
             bugs, key=lambda b: _IMPORTANCE_ORDER.get(b.get("importance", ""), 99)
         )
+        if limit:
+            bugs_sorted = bugs_sorted[:limit]
 
         sem = asyncio.Semaphore(concurrency)
         q: asyncio.Queue = asyncio.Queue()

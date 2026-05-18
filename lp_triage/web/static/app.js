@@ -97,6 +97,9 @@ function onRunDone(ev) {
   document.getElementById('btn-start-run').disabled = false;
   document.getElementById('btn-stop-run').style.display = 'none';
   document.getElementById('summary-section').style.display = 'block';
+  if (ev.stats?.posts_skipped_cap) {
+    document.getElementById('stat-skipped').textContent = ev.stats.posts_skipped_cap;
+  }
   if (approvedBugs.size > 0) document.getElementById('btn-post-all').style.display = 'inline-block';
 }
 
@@ -168,8 +171,8 @@ function _cleanText(text, projectUrl) {
   // Bare 40-char SHA not already in a URL path → full commit URL
   if (projectUrl) {
     const base = projectUrl.replace(/\/+$/, '');
-    text = text.replace(/(^|[^\/\w])([0-9a-f]{40})(?=[^\/\w]|$)/g,
-      (_, before, sha) => `${before}${base}/commit/${sha}`);
+    text = text.replace(/(?<![\/\w])([0-9a-f]{40})(?![\/\w])/g,
+      (sha) => `${base}/commit/${sha}`);
   }
   return text;
 }
@@ -247,7 +250,10 @@ function postComment(runId, bugId, body) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ comment_body: body, dry_run: document.getElementById('run-dry-run').checked }),
-  }).then(r => r.json()).then(() => {
+  }).then(r => {
+    if (!r.ok) return r.json().then(d => Promise.reject(new Error(d.error || d.detail || 'Post failed')));
+    return r.json();
+  }).then(() => {
     _removeCard(bugId);
   }).catch(err => alert('Post failed: ' + err));
 }
@@ -387,11 +393,6 @@ function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function togglePass(id) {
-  const el = document.getElementById(id);
-  el.type = el.type === 'password' ? 'text' : 'password';
-}
-
 // ─── Launchpad OAuth (OOB desktop flow) ──────────────────────────────────────
 let _lpTokenKey = null;
 
@@ -453,10 +454,12 @@ function cancelLPAuth() {
   const savedRunId = localStorage.getItem('lp-triage-run-id');
   if (!savedRunId) return;
 
+  let runStatus = 'running';
   fetch(`/run/${savedRunId}/results`)
     .then(r => r.ok ? r.json() : null)
     .then(data => {
       if (!data) { localStorage.removeItem('lp-triage-run-id'); return null; }
+      runStatus = data.status || 'running';
       return fetch(`/run/${savedRunId}/replay`).then(r => r.json());
     })
     .then(data => {
@@ -470,6 +473,11 @@ function cancelLPAuth() {
           runFinished = true;
         }
       });
+      // Use server status as fallback in case terminal event is absent from replay
+      if (!runFinished && runStatus !== 'running') {
+        onRunDone({});
+        runFinished = true;
+      }
       // If the run is still in progress, reattach to the SSE stream
       if (!runFinished) {
         document.getElementById('btn-stop-run').style.display = 'inline-block';

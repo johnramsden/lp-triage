@@ -81,9 +81,11 @@ def _human_format(event: StreamEvent) -> str | None:
         return f"  [done] {event.project}"
     if isinstance(event, RunDoneEvent):
         s = event.stats
+        skipped = s.get('posts_skipped_cap', 0)
+        skipped_str = f" skipped={skipped}" if skipped else ""
         return (
-            f"\n[run done] bugs={s.get('bugs', 0)} posted={s.get('posted', 0)} "
-            f"errors={s.get('errors', 0)} "
+            f"\n[run done] bugs={s.get('bugs', 0)} posted={s.get('posted', 0)}"
+            f"{skipped_str} errors={s.get('errors', 0)} "
             f"tokens={s.get('total_input_tokens', 0)}in/{s.get('total_output_tokens', 0)}out"
         )
     return None
@@ -188,7 +190,7 @@ def serve(
     from .web.server import create_app
 
     cfg = load_config()
-    web_app = create_app(cfg)
+    web_app = create_app()
 
     if open_browser:
         import webbrowser

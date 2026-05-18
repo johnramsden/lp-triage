@@ -23,7 +23,7 @@ from lp_triage.web.server import create_app
 
 @pytest.fixture
 def test_client(minimal_cfg):
-    app = create_app(minimal_cfg)
+    app = create_app()
     with patch("lp_triage.web.server.load_config", return_value=minimal_cfg):
         with TestClient(app) as client:
             yield client
