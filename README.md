@@ -72,6 +72,9 @@ output_dir    = "~/lp-triage-reports"
 cache_dir     = "~/.cache/lp-triage"
 lp_instance   = "production"   # LP instance: production, qastaging, staging
 
+[auth]
+lp_credentials_file = "~/.config/lp-triage/lp-credentials"  # set by OAuth flow
+
 [openrouter]
 model    = "openrouter/auto"
 base_url = "https://openrouter.ai/api/v1"
@@ -137,6 +140,11 @@ is found (subject to dry-run and max-posts limits).
 
 **Review** — each classification is queued for human approval. Edit the draft
 comment in-place if needed, then click **Approve & post** or **Skip**.
+
+**Allow reposting** — by default bugs that already have an lp-triage comment
+are skipped. Enable this checkbox to include them; they appear in the review
+queue with a warning so you can decide whether a second post makes sense.
+This option is web-UI-only; the CLI never reposts.
 
 ### Connecting Launchpad (for posting comments)
 

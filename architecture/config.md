@@ -9,9 +9,12 @@
 | `~/.config/lp-triage/config.toml` | User | API keys, provider, model, personal defaults |
 | `./lp-triage.toml` | Project | `[[projects]]` entries, project-level overrides |
 
-Merge order (highest wins): env vars → `lp-triage.toml` → `~/.config/…/config.toml` → built-in defaults.
+Merge order (highest wins): `lp-triage.toml` → `~/.config/…/config.toml` → built-in defaults.
 
-Env vars recognised: `OPENROUTER_API_KEY`, `GEMINI_API_KEY`.
+Two env vars are recognised as an out-of-band override applied on top of the
+merged config: `OPENROUTER_API_KEY` and `GEMINI_API_KEY`. No other env vars
+are read. CLI flags and web-UI runtime options (provider, limit, max-turns,
+etc.) are applied downstream by the caller — they are not part of `load_config`.
 
 ## `defaults` keys
 

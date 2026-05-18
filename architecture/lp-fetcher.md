@@ -13,12 +13,15 @@
 
 | Level | Key | TTL |
 |-------|-----|-----|
-| Bug list | `{project}-bugs.json` | `bug_list_ttl` seconds (default 1 h) |
-| Bug detail | `{bug_id}-{date_last_updated}.json` | Permanent (content-addressed) |
+| Bug list | `{lp_project}_buglist.json` | `bug_list_ttl` seconds (default 1 h) |
+| Bug detail | `bug_{bug_id}_{date_last_updated}.json` | Permanent (content-addressed) |
+
+The `date_last_updated` string in the detail cache filename has `:` replaced
+with `-` and `+` replaced with `p` so it is safe as a filesystem path.
 
 The detail cache is keyed on `(bug_id, date_last_updated)` so stale entries
 are naturally invalidated when LP reports a newer modification timestamp.
-`--refresh` bypasses the bug list cache but not the detail cache.
+`--refresh` bypasses both the bug list cache and the bug detail cache.
 
 ## Constructor parameters
 
@@ -36,9 +39,19 @@ are any name launchpadlib recognises: `production`, `qastaging`, `staging`.
 - `dry_run=False` — uses launchpadlib (`Credentials.load_from_path`) to post
   the comment and returns the message URL.
 
-`has_existing_ai_comment(bug_id, lp_login)` fetches live messages and checks
+`has_existing_ai_comment(bug_id)` fetches live messages anonymously and checks
 for the disclaimer prefix, skipping the cache. This prevents duplicate
 comments when a run is retried.
+
+## Repost behaviour
+
+By default, bugs that already have an lp-triage comment are skipped before
+classification to avoid wasting AI tokens. Pass `allow_repost=True` to
+`run_triage` (or enable "Allow reposting" in the web UI) to classify them
+anyway — they are marked with `already_posted: true` in the result so the
+reviewer sees a warning before approving a second post.
+
+This flag is only available through the web UI; the CLI never reposts.
 
 ## Comment format
 
