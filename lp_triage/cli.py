@@ -111,11 +111,9 @@ def run(
     pname = provider_name or cfg["defaults"].get("provider", "openrouter")
     provider, resolved_model = _make_provider(cfg, pname, model)
 
-    output_dir = Path(cfg["defaults"]["output_dir"]).expanduser()
-    output_dir.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    ndjson_path = output_dir / f"run-{ts}.ndjson"
-    summary_path = output_dir / f"run-{ts}-summary.txt"
+    ndjson_path = Path(f"run-{ts}.ndjson")
+    summary_path = Path(f"run-{ts}-summary.txt")
 
     classifications: list[dict] = []
 

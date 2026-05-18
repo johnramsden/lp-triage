@@ -68,7 +68,6 @@ provider      = "openrouter"   # or "gemini"
 concurrency   = 4              # parallel bugs per project
 max_turns     = 10             # agent loop iterations per bug
 bug_list_ttl  = 3600           # LP bug list cache TTL in seconds
-output_dir    = "~/lp-triage-reports"
 cache_dir     = "~/.cache/lp-triage"
 lp_instance   = "production"   # LP instance: production, qastaging, staging
 
@@ -106,7 +105,8 @@ uv run lp-triage config
 ```
 
 Output is NDJSON by default; `--human` prints readable lines. Each run writes
-a timestamped NDJSON log and a plain-text summary to `output_dir`.
+a timestamped NDJSON log (`run-<ts>.ndjson`) and a plain-text summary
+(`run-<ts>-summary.txt`) to the current working directory.
 
 ### All CLI flags
 

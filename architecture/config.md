@@ -24,7 +24,6 @@ etc.) are applied downstream by the caller — they are not part of `load_config
 | `concurrency` | `4` | Parallel bugs per project |
 | `max_turns` | `10` | Agent loop iterations per bug |
 | `bug_list_ttl` | `3600` | LP bug list cache TTL in seconds |
-| `output_dir` | `~/lp-triage-reports` | Report output directory |
 | `cache_dir` | `~/.cache/lp-triage` | Cache and launchpadlib data directory |
 | `lp_instance` | `"production"` | Launchpad instance (`production`, `qastaging`, `staging`) |
 

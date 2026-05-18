@@ -1,7 +1,10 @@
 """Two-file config: ~/.config/lp-triage/config.toml (user) + ./lp-triage.toml (project).
 
 Precedence (highest to lowest):
-  env vars > CLI flags > ./lp-triage.toml > ~/.config/lp-triage/config.toml > built-in defaults
+  ./lp-triage.toml > ~/.config/lp-triage/config.toml > built-in defaults
+
+OPENROUTER_API_KEY and GEMINI_API_KEY env vars override the merged result.
+CLI flags and web-UI options are applied by the caller, not here.
 """
 
 from __future__ import annotations
@@ -26,7 +29,6 @@ _DEFAULTS: dict[str, Any] = {
     "defaults": {
         "provider": "openrouter",
         "cache_dir": str(Path.home() / ".cache" / "lp-triage"),
-        "output_dir": str(Path.home() / "lp-triage-reports"),
         "bug_list_ttl": 3600,
         "concurrency": 4,
         "max_turns": 10,
