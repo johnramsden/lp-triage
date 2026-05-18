@@ -28,30 +28,22 @@ redirect back to a callback URL for unregistered consumers.
 
 ## `get_request_token(lp_instance="production")`
 
-Resolves the web root for `lp_instance` via `launchpadlib.uris.lookup_web_root`,
-then POSTs to `{web_root}+request-token` via httpx with:
+Creates a `launchpadlib.credentials.Credentials` object and calls its
+`get_request_token(web_root=...)` method. Returns
+`(auth_url, token_key, creds)`. The `Credentials` object retains the request
+token internally; the server stores it in `_pending_oauth[token_key]` until
+the user completes the flow.
 
-```
-oauth_consumer_key   = lp-triage
-oauth_signature_method = PLAINTEXT
-oauth_signature      = &
-oauth_callback       = oob
-```
+## `exchange_token(cfg, creds, lp_instance="production")`
 
-Returns `(auth_url, token_key, token_secret)`. `token_secret` is stored in
-`_pending_oauth[token_key]` in the server's memory until the user completes
-the flow.
-
-## `exchange_token(cfg, oauth_token, oauth_token_secret, oauth_verifier, lp_instance="production")`
-
-POSTs to `{web_root}+access-token` for the resolved instance. For the OOB
-flow, `oauth_verifier` is passed as `""` and is omitted from the request. LP
-accepts this because the request token was blessed by the user on LP's website.
+Calls `creds.exchange_request_token_for_access_token(web_root=...)` then
+`creds.save_to_path(creds_file)`. LP accepts the exchange without a verifier
+because the request token was blessed by the user on LP's website.
 
 ## Credential storage
 
-Access token and secret are written to
-`~/.config/lp-triage/lp-credentials` in launchpadlib INI format:
+`Credentials.save_to_path()` writes the standard launchpadlib INI format to
+`~/.config/lp-triage/lp-credentials`:
 
 ```ini
 [1]
@@ -61,13 +53,5 @@ access_token = <token>
 access_secret = <secret>
 ```
 
-`launchpadlib.credentials.Credentials.load_from_path()` reads this format
-directly, so `LPFetcher` can authenticate without re-implementing the
-credential loading logic.
-
-## Why httpx, not launchpadlib
-
-launchpadlib's built-in `get_request_token()` does not send `oauth_callback`
-at all, making it impossible to use the web flow even for registered
-consumers. We call the LP REST endpoint directly with httpx to have full
-control over the request parameters.
+`Credentials.load_from_path()` reads this format directly, so `LPFetcher`
+can authenticate without re-implementing the credential loading logic.

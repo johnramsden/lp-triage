@@ -77,7 +77,7 @@ class RunStore:
 
 
 _store = RunStore()
-_pending_oauth: dict[str, str] = {}  # token_key -> token_secret
+_pending_oauth: dict = {}  # token_key -> Credentials object
 
 
 def create_app() -> FastAPI:
@@ -280,8 +280,8 @@ def create_app() -> FastAPI:
         from ..engine.lp_auth import get_request_token
 
         lp_instance = load_config()["defaults"].get("lp_instance", "production")
-        auth_url, token_key, token_secret = await asyncio.to_thread(get_request_token, lp_instance)
-        _pending_oauth[token_key] = token_secret
+        auth_url, token_key, creds = await asyncio.to_thread(get_request_token, lp_instance)
+        _pending_oauth[token_key] = creds
         return JSONResponse({"auth_url": auth_url, "token_key": token_key})
 
     @app.post("/auth/lp/complete")
@@ -292,14 +292,14 @@ def create_app() -> FastAPI:
         body = await request.json()
         token_key = body.get("token_key", "")
         cfg = load_config()
-        token_secret = _pending_oauth.pop(token_key, "")
-        if not token_secret:
+        creds = _pending_oauth.pop(token_key, None)
+        if creds is None:
             return JSONResponse(
                 {"ok": False, "error": "Session expired — please start again."},
                 status_code=400,
             )
         success = await asyncio.to_thread(
-            exchange_token, cfg, token_key, token_secret, "",
+            exchange_token, cfg, creds,
             cfg["defaults"].get("lp_instance", "production"),
         )
         if success:
