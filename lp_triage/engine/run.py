@@ -61,9 +61,6 @@ async def run_triage(
         all_projects = [p for p in all_projects if p.lp_project in projects_filter]
 
     cache_dir = Path(cfg["defaults"]["cache_dir"]).expanduser()
-    output_dir = Path(cfg["defaults"]["output_dir"]).expanduser()
-    output_dir.mkdir(parents=True, exist_ok=True)
-
     repo_manager = RepoManager(cache_dir)
     fetcher = LPFetcher(
         cache_dir=cache_dir,

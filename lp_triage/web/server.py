@@ -9,15 +9,13 @@ import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
-
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
 from ..engine.config import _deep_merge, load_config, load_project_config, load_user_config, save_project_config, save_user_config
-from ..engine.events import ClassificationEvent, RunDoneEvent, StreamEvent, to_ndjson
+from ..engine.events import ClassificationEvent, RunDoneEvent, StreamEvent
 from ..engine.run import run_triage
 
 logger = logging.getLogger(__name__)
@@ -31,17 +29,13 @@ class RunStore:
     def __init__(self) -> None:
         self._runs: dict[str, dict] = {}
 
-    def create(self, run_id: str, cfg: dict) -> None:
-        output_dir = Path(cfg["defaults"]["output_dir"]).expanduser()
-        output_dir.mkdir(parents=True, exist_ok=True)
-        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    def create(self, run_id: str) -> None:
         self._runs[run_id] = {
             "id": run_id,
             "status": "running",
-            "started_at": ts,
+            "started_at": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
             "events": [],
             "results": {},
-            "ndjson_path": output_dir / f"run-{ts}.ndjson",
             "queue": asyncio.Queue(),
         }
 
@@ -60,10 +54,6 @@ class RunStore:
         if isinstance(event, RunDoneEvent):
             run["status"] = "done"
             run["stats"] = event.stats
-        # Write to NDJSON log
-        with open(run["ndjson_path"], "a") as f:
-            f.write(to_ndjson(event) + "\n")
-        # Notify SSE subscribers
         run["queue"].put_nowait(d)
 
     def get(self, run_id: str) -> dict | None:
@@ -81,23 +71,9 @@ class RunStore:
             return None
         return run["results"].get(bug_id)
 
-    def replay_from_ndjson(self, run_id: str) -> list[dict]:
+    def get_events(self, run_id: str) -> list[dict]:
         run = self._runs.get(run_id)
-        if not run:
-            return []
-        path = run["ndjson_path"]
-        if not Path(path).exists():
-            return []
-        events = []
-        with open(path) as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    try:
-                        events.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        pass
-        return events
+        return run["events"] if run else []
 
 
 _store = RunStore()
@@ -158,7 +134,7 @@ def create_app() -> FastAPI:
         body = await request.json()
         run_id = str(uuid.uuid4())
         cfg = load_config()
-        _store.create(run_id, cfg)
+        _store.create(run_id)
 
         provider_name = body.get("provider") or cfg["defaults"].get("provider", "openrouter")
         model = body.get("model")
@@ -197,12 +173,10 @@ def create_app() -> FastAPI:
                 ):
                     _store.append_event(run_id, event)
             except asyncio.CancelledError:
-                # Write terminal event to NDJSON so replay shows the run as stopped.
+                # Append terminal event so replay shows the run as stopped.
                 run = _store.get(run_id)
                 if run:
-                    stopped = {"t": "run_stopped", "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
-                    with open(run["ndjson_path"], "a") as f:
-                        f.write(json.dumps(stopped) + "\n")
+                    run["events"].append({"t": "run_stopped", "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")})
                 raise
 
         task = asyncio.create_task(_bg())
@@ -298,8 +272,10 @@ def create_app() -> FastAPI:
 
     @app.get("/run/{run_id}/replay")
     async def replay_run(run_id: str) -> JSONResponse:
-        events = _store.replay_from_ndjson(run_id)
-        return JSONResponse({"events": events})
+        run = _store.get(run_id)
+        if run is None:
+            raise HTTPException(404, "run not found")
+        return JSONResponse({"events": _store.get_events(run_id)})
 
     @app.get("/auth/lp")
     async def lp_oauth_start() -> JSONResponse:

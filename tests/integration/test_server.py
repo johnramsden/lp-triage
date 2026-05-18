@@ -119,7 +119,7 @@ async def test_post_bug_dry_run(test_client, minimal_cfg, tmp_path):
     import uuid
 
     run_id = str(uuid.uuid4())
-    _store.create(run_id, minimal_cfg)
+    _store.create(run_id)
     result = {
         "schema": 1,
         "category": "bug",
