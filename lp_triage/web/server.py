@@ -284,7 +284,7 @@ def create_app() -> FastAPI:
             lp_instance=cfg["defaults"].get("lp_instance", "production"),
         )
 
-        if not dry_run:
+        if not dry_run and not result.get("already_posted"):
             already = await fetcher.has_existing_ai_comment(bug_id)
             if already:
                 return JSONResponse(
