@@ -24,38 +24,30 @@ uv run playwright install chromium
 
 ## Configuration
 
-Config is split across two TOML files:
+All configuration lives in a single file: `~/.config/lp-triage/config.toml`
 
-| File | Purpose |
-|------|---------|
-| `~/.config/lp-triage/config.toml` | Personal settings — API keys, provider, model |
-| `./lp-triage.toml` | Project settings — which LP projects to triage and which repos to read |
+This includes both personal settings (API keys, provider, model) and the list
+of Launchpad projects to triage.
 
-Minimal user config:
+Minimal config:
 
 ```toml
 # ~/.config/lp-triage/config.toml
 [auth]
 openrouter_api_key = "sk-or-..."
-```
 
-Or use environment variables:
-
-```bash
-export OPENROUTER_API_KEY="sk-or-..."
-export GEMINI_API_KEY="..."
-```
-
-### Project config (`lp-triage.toml`)
-
-Each entry maps a Launchpad project to a git repository (or subdirectory of one):
-
-```toml
 [[projects]]
 lp_project = "charm-ceph-mon"
 url        = "https://github.com/canonical/ceph-charms"
 branch     = "main"
 subdir     = "ceph-mon"      # optional — omit to scope to the whole repo
+```
+
+Or set API keys via environment variables:
+
+```bash
+export OPENROUTER_API_KEY="sk-or-..."
+export GEMINI_API_KEY="..."
 ```
 
 Multiple projects can share the same repository URL; the repo is cloned once.

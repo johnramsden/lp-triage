@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
-from ..engine.config import _deep_merge, load_config, load_project_config, load_user_config, save_project_config, save_user_config
+from ..engine.config import _deep_merge, load_config, load_user_config, save_user_config
 from ..engine.events import ClassificationEvent, RunDoneEvent, StreamEvent
 from ..engine.run import run_triage
 
@@ -103,13 +103,12 @@ def create_app() -> FastAPI:
     @app.get("/config")
     async def get_config() -> JSONResponse:
         user = load_user_config()
-        project = load_project_config()
         masked = json.loads(json.dumps(user))
         # Replace secrets with a sentinel — never expose any part of the key
         auth = masked.setdefault("auth", {})
         auth["openrouter_api_key"] = _SENTINEL_KEY if auth.get("openrouter_api_key") else ""
         auth["gemini_api_key"] = _SENTINEL_KEY if auth.get("gemini_api_key") else ""
-        return JSONResponse({"user": masked, "project": project})
+        return JSONResponse({"user": masked})
 
     @app.put("/config")
     async def put_config(request: Request) -> JSONResponse:
@@ -125,8 +124,6 @@ def create_app() -> FastAPI:
                     )
             # Merge onto existing so keys not shown in the UI are preserved
             save_user_config(_deep_merge(existing_user, new_user))
-        if "project" in body:
-            save_project_config(body["project"])
         return JSONResponse({"ok": True})
 
     @app.post("/run")

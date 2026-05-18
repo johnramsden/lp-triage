@@ -1,7 +1,8 @@
-"""Two-file config: ~/.config/lp-triage/config.toml (user) + ./lp-triage.toml (project).
+"""Single config file: ~/.config/lp-triage/config.toml.
 
-Precedence (highest to lowest):
-  ./lp-triage.toml > ~/.config/lp-triage/config.toml > built-in defaults
+Contains both personal settings (API keys, provider, model) and project
+definitions ([[projects]] entries). Precedence:
+  ~/.config/lp-triage/config.toml > built-in defaults
 
 OPENROUTER_API_KEY and GEMINI_API_KEY env vars override the merged result.
 CLI flags and web-UI options are applied by the caller, not here.
@@ -18,7 +19,6 @@ from typing import Any
 import tomli_w
 
 _USER_CONFIG = Path.home() / ".config" / "lp-triage" / "config.toml"
-_PROJECT_CONFIG = Path("lp-triage.toml")
 
 _DEFAULTS: dict[str, Any] = {
     "auth": {
@@ -69,13 +69,10 @@ def _atomic_write(path: Path, data: dict) -> None:
     tmp.replace(path)
 
 
-def load_config(project_config_path: Path | None = None) -> dict:
+def load_config(config_path: Path | None = None) -> dict:
     cfg = _deep_merge({}, _DEFAULTS)
-    user_data = _load_toml(_USER_CONFIG)
+    user_data = _load_toml(config_path or _USER_CONFIG)
     cfg = _deep_merge(cfg, user_data)
-    proj_path = project_config_path or _PROJECT_CONFIG
-    proj_data = _load_toml(proj_path)
-    cfg = _deep_merge(cfg, proj_data)
 
     if key := os.environ.get("OPENROUTER_API_KEY"):
         cfg.setdefault("auth", {})["openrouter_api_key"] = key
@@ -89,16 +86,8 @@ def load_user_config() -> dict:
     return _load_toml(_USER_CONFIG)
 
 
-def load_project_config(path: Path | None = None) -> dict:
-    return _load_toml(path or _PROJECT_CONFIG)
-
-
 def save_user_config(data: dict) -> None:
     _atomic_write(_USER_CONFIG, data)
-
-
-def save_project_config(data: dict, path: Path | None = None) -> None:
-    _atomic_write(path or _PROJECT_CONFIG, data)
 
 
 @dataclass

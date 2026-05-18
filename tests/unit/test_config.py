@@ -53,17 +53,17 @@ def test_atomic_write(tmp_path):
 def test_env_var_override(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key-123")
     monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
-    cfg = load_config(project_config_path=tmp_path / "nonexistent.toml")
+    cfg = load_config(config_path=tmp_path / "nonexistent.toml")
     assert cfg["auth"]["openrouter_api_key"] == "test-key-123"
     assert cfg["auth"]["gemini_api_key"] == "gemini-key"
 
 
 def test_get_projects(tmp_path):
-    toml = tmp_path / "lp-triage.toml"
-    toml.write_text(
+    config = tmp_path / "config.toml"
+    config.write_text(
         '[[projects]]\nlp_project="charm-ceph-mon"\nurl="https://github.com/canonical/ceph-charms"\nbranch="main"\nsubdir="ceph-mon"\n'
     )
-    cfg = load_config(project_config_path=toml)
+    cfg = load_config(config_path=config)
     projects = get_projects(cfg)
     assert len(projects) == 1
     assert projects[0].lp_project == "charm-ceph-mon"
@@ -77,8 +77,8 @@ def test_repo_dir_name():
     assert repo_dir_name("https://github.com/canonical/ceph-charms/") == "ceph-charms"
 
 
-def test_defaults_are_present():
-    cfg = load_config(project_config_path=Path("/tmp/nonexistent-lp-triage.toml"))
+def test_defaults_are_present(tmp_path):
+    cfg = load_config(config_path=tmp_path / "nonexistent.toml")
     assert "defaults" in cfg
     assert "concurrency" in cfg["defaults"]
     assert cfg["defaults"]["concurrency"] == 4

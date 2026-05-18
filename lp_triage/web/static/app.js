@@ -303,14 +303,14 @@ function setInstanceBadge(instance) {
 let _projectsData = [];
 
 function loadConfig() {
-  fetch('/config').then(r => r.json()).then(({ user, project }) => {
+  fetch('/config').then(r => r.json()).then(({ user }) => {
     document.getElementById('cfg-or-key').value = user?.auth?.openrouter_api_key || '';
     document.getElementById('cfg-gemini-key').value = user?.auth?.gemini_api_key || '';
     document.getElementById('cfg-lp-instance').value = user?.defaults?.lp_instance || 'production';
     document.getElementById('cfg-provider').value = user?.defaults?.provider || 'openrouter';
     document.getElementById('cfg-or-model').value = user?.openrouter?.model || '';
     document.getElementById('cfg-gemini-model').value = user?.gemini?.model || '';
-    _projectsData = project?.projects || [];
+    _projectsData = user?.projects || [];
     // Show configured/not-configured status; inputs left blank = "no change"
     const orStatus = document.getElementById('cfg-or-key-status');
     const gmStatus = document.getElementById('cfg-gemini-key-status');
@@ -375,12 +375,12 @@ function saveConfig() {
     },
     openrouter: { model: document.getElementById('cfg-or-model').value },
     gemini: { model: document.getElementById('cfg-gemini-model').value },
+    projects: _projectsData,
   };
-  const project = { projects: _projectsData };
   fetch('/config', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user, project }),
+    body: JSON.stringify({ user }),
   }).then(() => {
     btn.textContent = 'Saved!';
     setTimeout(() => { btn.textContent = 'Save'; }, 1500);

@@ -38,29 +38,22 @@ def test_index_returns_html(test_client):
 
 def test_get_config(test_client, minimal_cfg):
     with patch("lp_triage.web.server.load_user_config", return_value=minimal_cfg):
-        with patch("lp_triage.web.server.load_project_config", return_value=minimal_cfg):
-            resp = test_client.get("/config")
+        resp = test_client.get("/config")
     assert resp.status_code == 200
     data = resp.json()
     assert "user" in data
-    assert "project" in data
 
 
 def test_put_config(test_client, tmp_path):
     with patch("lp_triage.web.server.load_user_config", return_value={}):
         with patch("lp_triage.web.server.save_user_config") as mock_save_user:
-            with patch("lp_triage.web.server.save_project_config") as mock_save_proj:
-                resp = test_client.put(
-                    "/config",
-                    json={
-                        "user": {"auth": {"openrouter_api_key": "new-key"}},
-                        "project": {"projects": []},
-                    },
-                )
+            resp = test_client.put(
+                "/config",
+                json={"user": {"auth": {"openrouter_api_key": "new-key"}, "projects": []}},
+            )
     assert resp.status_code == 200
     assert resp.json() == {"ok": True}
     mock_save_user.assert_called_once()
-    mock_save_proj.assert_called_once()
 
 
 def test_post_run_returns_run_id(test_client, minimal_cfg, tmp_path):

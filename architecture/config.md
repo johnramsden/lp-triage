@@ -2,14 +2,12 @@
 
 **File:** `lp_triage/engine/config.py`
 
-## Two-file split
+## Single config file
 
-| File | Owner | Contents |
-|------|-------|---------|
-| `~/.config/lp-triage/config.toml` | User | API keys, provider, model, personal defaults |
-| `./lp-triage.toml` | Project | `[[projects]]` entries, project-level overrides |
+All configuration lives in `~/.config/lp-triage/config.toml`. This includes
+both personal settings (API keys, provider, model) and the `[[projects]]` list.
 
-Merge order (highest wins): `lp-triage.toml` → `~/.config/…/config.toml` → built-in defaults.
+Precedence: `~/.config/lp-triage/config.toml` → built-in defaults.
 
 Two env vars are recognised as an out-of-band override applied on top of the
 merged config: `OPENROUTER_API_KEY` and `GEMINI_API_KEY`. No other env vars

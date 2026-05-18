@@ -24,7 +24,6 @@ def minimal_cfg(tmp_path):
         "defaults": {
             "provider": "openrouter",
             "cache_dir": str(tmp_path / "cache"),
-            "output_dir": str(tmp_path / "output"),
             "bug_list_ttl": 3600,
             "concurrency": 1,
         },
