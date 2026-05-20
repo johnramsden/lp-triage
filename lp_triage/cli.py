@@ -110,7 +110,7 @@ def run(
 
     classifications: list[dict] = []
 
-    resolved_max_turns = max_turns if max_turns is not None else cfg["defaults"].get("max_turns", 10)
+    resolved_max_turns = max_turns if max_turns is not None else cfg["defaults"].get("max_turns", 30)
     if resolved_max_turns < 1:
         raise typer.BadParameter("--max-turns must be >= 1")
 

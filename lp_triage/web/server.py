@@ -150,7 +150,7 @@ def create_app() -> FastAPI:
             prov = OpenAIProvider(api_key=key, base_url=base_url)
             resolved_model = model or cfg.get("openrouter", {}).get("model", "openrouter/auto")
 
-        default_max_turns = cfg["defaults"].get("max_turns", 10)
+        default_max_turns = cfg["defaults"].get("max_turns", 30)
 
         async def _bg() -> None:
             try:

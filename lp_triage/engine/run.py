@@ -54,7 +54,7 @@ async def run_triage(
     provider: Provider,
     model: str,
     debug: bool = False,
-    max_turns: int = 10,
+    max_turns: int = 30,
 ) -> AsyncIterator[StreamEvent]:
     all_projects = get_projects(cfg)
     if projects_filter:

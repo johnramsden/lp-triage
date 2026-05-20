@@ -219,7 +219,7 @@ async def classify_bug(
     provider: Provider,
     model: str,
     debug: bool = False,
-    max_turns: int = 10,
+    max_turns: int = 30,
 ) -> AsyncIterator[StreamEvent]:
     bug_id = bug["id"]
     repo_dir = repo_manager.repo_path(repo_dir_name(project.url))

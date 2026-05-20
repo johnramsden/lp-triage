@@ -31,7 +31,7 @@ _DEFAULTS: dict[str, Any] = {
         "cache_dir": str(Path.home() / ".cache" / "lp-triage"),
         "bug_list_ttl": 3600,
         "concurrency": 4,
-        "max_turns": 10,
+        "max_turns": 30,
         "lp_instance": "production",
     },
     "openrouter": {
