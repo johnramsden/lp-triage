@@ -36,6 +36,7 @@ function startRun() {
   document.getElementById('summary-tbody').innerHTML = '';
   document.getElementById('summary-section').style.display = 'none';
   document.getElementById('stats-bar').style.display = 'flex';
+  document.getElementById('stat-tokens-group').style.display = provider === 'gemini' ? 'contents' : 'none';
   document.getElementById('btn-post-all').style.display = 'none';
   bugTitles = {};
 
