@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 
 from openai import AsyncOpenAI
 
-from .base import ProviderEvent, TextChunk, ToolCall, Usage
+from .base import ProviderEvent, TextChunk, ToolCall
 
 _OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 
@@ -24,7 +24,6 @@ class OpenAIProvider:
             "model": model,
             "messages": messages,
             "stream": True,
-            "stream_options": {"include_usage": True},
         }
         if tools:
             kwargs["tools"] = tools
@@ -34,11 +33,6 @@ class OpenAIProvider:
         stream = await self._client.chat.completions.create(**kwargs)
         async for chunk in stream:
                 if not chunk.choices:
-                    if chunk.usage:
-                        yield Usage(
-                            input_tokens=chunk.usage.prompt_tokens,
-                            output_tokens=chunk.usage.completion_tokens,
-                        )
                     continue
 
                 delta = chunk.choices[0].delta

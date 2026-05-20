@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from lp_triage.engine.providers.base import TextChunk, ToolCall, Usage
+from lp_triage.engine.providers.base import TextChunk, ToolCall
 from lp_triage.engine.providers.openai_provider import OpenAIProvider
 
 
@@ -77,23 +77,3 @@ async def test_openai_provider_tool_call():
     assert tool_events[0].name == "get_log"
     assert tool_events[0].arguments == {"n": 10}
 
-
-@pytest.mark.asyncio
-async def test_openai_provider_usage():
-    prov = OpenAIProvider(api_key="test")
-
-    usage_mock = MagicMock()
-    usage_mock.prompt_tokens = 100
-    usage_mock.completion_tokens = 50
-    usage_chunk = _FakeChunk(usage=usage_mock)
-
-    chunks = [usage_chunk]
-    with patch.object(prov._client.chat.completions, "create", _make_create_mock(chunks)):
-        events = []
-        async for ev in prov.stream_completion([], [], "test"):
-            events.append(ev)
-
-    usage_events = [e for e in events if isinstance(e, Usage)]
-    assert len(usage_events) == 1
-    assert usage_events[0].input_tokens == 100
-    assert usage_events[0].output_tokens == 50
