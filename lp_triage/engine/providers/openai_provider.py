@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import re
 from collections.abc import AsyncIterator
 
 from openai import AsyncOpenAI
@@ -8,6 +10,27 @@ from openai import AsyncOpenAI
 from .base import ProviderEvent, TextChunk, ToolCall
 
 _OPENROUTER_BASE = "https://openrouter.ai/api/v1"
+
+logger = logging.getLogger(__name__)
+
+
+def _repair_tool_json(s: str) -> str:
+    # Fix "evidence": <unquoted-url>  →  "evidence": ["url"]
+    # Fix "evidence": ,               →  "evidence": []
+    # Both patterns crash json.loads; we've seen both from weaker models.
+    #
+    # The negative lookahead includes \s* so that backtracking in the preceding
+    # \s* can't land the lookahead on a space instead of the actual value start.
+    def _fix(m: re.Match) -> str:
+        val = m.group(1).strip()
+        return f'"evidence": ["{val}"]' if val else '"evidence": []'
+
+    return re.sub(
+        r'"evidence"\s*:\s*(?!\s*[\["tfn\d])(.*?)(?=,|\s*})',
+        _fix,
+        s,
+        flags=re.DOTALL,
+    )
 
 
 class OpenAIProvider:
@@ -57,11 +80,14 @@ class OpenAIProvider:
                         buf = tool_bufs[idx]
                         try:
                             args = json.loads(buf["args"]) if buf["args"] else {}
-                        except json.JSONDecodeError:
-                            import logging
-                            logging.getLogger(__name__).warning(
+                        except json.JSONDecodeError as exc:
+                            logger.warning(
                                 "Malformed tool-call JSON for %s: %r", buf["name"], buf["args"]
                             )
-                            raise
+                            repaired = _repair_tool_json(buf["args"])
+                            try:
+                                args = json.loads(repaired)
+                            except json.JSONDecodeError:
+                                raise exc
                         yield ToolCall(id=buf["id"], name=buf["name"], arguments=args)
                     tool_bufs.clear()

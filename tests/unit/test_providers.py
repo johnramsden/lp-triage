@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from lp_triage.engine.providers.base import TextChunk, ToolCall
-from lp_triage.engine.providers.openai_provider import OpenAIProvider
+from lp_triage.engine.providers.openai_provider import OpenAIProvider, _repair_tool_json
 
 
 class _FakeChunk:
@@ -76,4 +76,21 @@ async def test_openai_provider_tool_call():
     assert len(tool_events) == 1
     assert tool_events[0].name == "get_log"
     assert tool_events[0].arguments == {"n": 10}
+
+
+def test_repair_tool_json_empty_evidence():
+    s = '{"category": "bug", "evidence": , "summary": "foo"}'
+    result = json.loads(_repair_tool_json(s))
+    assert result["evidence"] == []
+
+
+def test_repair_tool_json_unquoted_url():
+    s = '{"category": "already_fixed", "evidence": https://github.com/org/repo/commit/abc123, "summary": "foo"}'
+    result = json.loads(_repair_tool_json(s))
+    assert result["evidence"] == ["https://github.com/org/repo/commit/abc123"]
+
+
+def test_repair_tool_json_valid_passthrough():
+    s = '{"category": "bug", "evidence": ["https://github.com/org/repo/commit/abc"], "summary": "foo"}'
+    assert _repair_tool_json(s) == s
 

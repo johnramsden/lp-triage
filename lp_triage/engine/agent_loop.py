@@ -174,8 +174,7 @@ Classification categories:
 
 For 'already_fixed', evidence and fix_reference are required.
 For any other classification, evidence should list supporting commit/PR URLs if found.
-If you find no supporting evidence, leave evidence empty and avoid posting (the posting gate
-will prevent it).
+If you find no supporting evidence, set evidence to an empty list [].
 
 URL format: whenever you cite a commit, always use the full URL:
   {repo}/commit/<full-40-char-sha>
