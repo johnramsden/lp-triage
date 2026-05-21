@@ -98,14 +98,21 @@ _GET_LOG_TOOL = {
     "type": "function",
     "function": {
         "name": "get_log",
-        "description": "Return the last N commit summaries scoped to the charm subdirectory",
+        "description": (
+            "Return commit summaries scoped to the charm subdirectory, newest first. "
+            "Use from_hash to continue from a known commit (inclusive)."
+        ),
         "parameters": {
             "type": "object",
             "properties": {
                 "n": {
                     "type": "integer",
-                    "description": "Number of recent commits to return (max 50)",
-                }
+                    "description": "Number of commits to return (max 100)",
+                },
+                "from_hash": {
+                    "type": "string",
+                    "description": "Start listing from this commit hash (inclusive). Omit to start from HEAD.",
+                },
             },
             "required": ["n"],
         },
@@ -320,8 +327,9 @@ async def _dispatch_tool(tc: ToolCall, repo_dir: Path, project: ProjectCfg, repo
 
     try:
         if tc.name == "get_log":
-            n = min(int(tc.arguments.get("n", 20)), 50)
-            return await repo_manager.get_log(repo_dir, project.branch, project.subdir, n)
+            n = min(int(tc.arguments.get("n", 20)), 100)
+            from_hash = tc.arguments.get("from_hash") or None
+            return await repo_manager.get_log(repo_dir, project.branch, project.subdir, n, from_hash)
         elif tc.name == "get_commit":
             h = str(tc.arguments.get("hash", ""))
             return await repo_manager.get_commit(repo_dir, h)

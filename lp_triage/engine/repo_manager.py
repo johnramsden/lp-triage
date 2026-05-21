@@ -43,11 +43,16 @@ class RepoManager:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
-    async def get_log(self, repo_dir: Path, branch: str, subdir: str, n: int) -> str:
-        if not _SAFE_REF_RE.match(branch):
-            raise RepoError(f"invalid branch name: {branch!r}")
-        # branch must come before -- so git treats it as a ref, not a pathspec
-        cmd = ["log", f"-{n}", "--oneline", branch, "--"]
+    async def get_log(self, repo_dir: Path, branch: str, subdir: str, n: int, from_hash: str | None = None) -> str:
+        if from_hash is not None:
+            if not _SAFE_HASH_RE.match(from_hash):
+                raise RepoError(f"invalid commit hash: {from_hash!r}")
+            start_ref = from_hash
+        else:
+            if not _SAFE_REF_RE.match(branch):
+                raise RepoError(f"invalid branch name: {branch!r}")
+            start_ref = branch
+        cmd = ["log", f"-{n}", "--oneline", start_ref, "--"]
         if subdir:
             cmd.append(subdir)
         return await self._git(repo_dir, cmd)

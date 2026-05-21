@@ -111,6 +111,22 @@ async def test_get_log_rejects_invalid_branch(real_git_repo, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_get_log_from_hash(real_git_repo, tmp_path):
+    rm = RepoManager(tmp_path)
+    log = await rm.get_log(real_git_repo, "main", "", 1)
+    commit_hash = log.split()[0]
+    result = await rm.get_log(real_git_repo, "main", "", 5, from_hash=commit_hash)
+    assert commit_hash in result
+
+
+@pytest.mark.asyncio
+async def test_get_log_rejects_invalid_from_hash(real_git_repo, tmp_path):
+    rm = RepoManager(tmp_path)
+    with pytest.raises(RepoError, match="invalid commit hash"):
+        await rm.get_log(real_git_repo, "main", "", 5, from_hash="not-a-hash!")
+
+
+@pytest.mark.asyncio
 async def test_read_file_returns_content(real_git_repo, tmp_path):
     rm = RepoManager(tmp_path)
     result = await rm.read_file(real_git_repo, "main", "", "hello.txt")

@@ -13,7 +13,7 @@ when `max_turns` is exceeded.
 
 | Tool | Description |
 |------|-------------|
-| `get_log` | Last N commits scoped to the project's branch and subdir |
+| `get_log` | N commits scoped to the project's branch and subdir; optional `from_hash` to start from a specific commit (inclusive) |
 | `get_commit` | Full diff + stat for a specific commit hash |
 | `read_file` | Contents of a file at a path relative to the subdir |
 | `classify_bug` | Submit the classification — terminates the loop |
