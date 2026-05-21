@@ -206,7 +206,7 @@ def _build_system(project: ProjectCfg) -> str:
 
 def _build_user_message(bug: dict) -> str:
     messages_text = ""
-    for msg in (bug.get("messages") or [])[:5]:  # include up to 5 messages for context
+    for msg in (bug.get("messages") or []):
         messages_text += f"\n---\n**{msg['author']}** ({msg['date_created']}):\n{msg['content']}\n"
 
     return (
@@ -235,9 +235,6 @@ async def classify_bug(
         {"role": "user", "content": _build_user_message(bug)},
     ]
     classification: dict | None = None
-    total_tool_calls = 0
-    _MAX_TOOL_CALLS = max_turns * 5  # hard cap across all turns
-    _MAX_TOOL_OUTPUT = 32 * 1024  # 32 KiB per tool result
 
     for _turn in range(max_turns):
         tool_calls_this_turn: list[ToolCall] = []
@@ -279,15 +276,6 @@ async def classify_bug(
         ]
         messages.append(assistant_msg)
 
-        # Dispatch each tool call
-        total_tool_calls += len(tool_calls_this_turn)
-        if total_tool_calls > _MAX_TOOL_CALLS:
-            yield BugErrorEvent(
-                bug_id=bug_id,
-                error=f"exceeded max tool calls ({_MAX_TOOL_CALLS}) without classify_bug call",
-            )
-            return
-
         for tc in tool_calls_this_turn:
             if tc.name == "classify_bug":
                 classification = {**tc.arguments, "schema": 1, "_project_url": project.url}
@@ -301,8 +289,6 @@ async def classify_bug(
                 )
             else:
                 result = await _dispatch_tool(tc, repo_dir, project, repo_manager)
-                if len(result) > _MAX_TOOL_OUTPUT:
-                    result = result[:_MAX_TOOL_OUTPUT] + f"\n[truncated — output exceeded {_MAX_TOOL_OUTPUT // 1024} KiB]"
                 messages.append(
                     {
                         "role": "tool",
