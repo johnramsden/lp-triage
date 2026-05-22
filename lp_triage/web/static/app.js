@@ -325,12 +325,21 @@ function loadConfig() {
 
 function renderProjects() {
   const container = document.getElementById('projects-list');
+
+  // Save focus position so a DOM rebuild never loses the user's cursor.
+  const active = document.activeElement;
+  let savedFocus = null;
+  if (active && container.contains(active)) {
+    const inputs = [...container.querySelectorAll('input')];
+    const idx = inputs.indexOf(active);
+    if (idx !== -1) {
+      savedFocus = { idx, start: active.selectionStart, end: active.selectionEnd };
+    }
+  }
+
   container.innerHTML = '';
   _projectsData.forEach((p, i) => {
     const url = p.url || '';
-    const linkBtn = url
-      ? `<a href="${escHtml(url)}" target="_blank" rel="noopener" title="Open repository" style="color:var(--warm-grey);text-decoration:none;font-size:1rem;line-height:1;flex-shrink:0" onmouseover="this.style.color='white'" onmouseout="this.style.color='var(--warm-grey)'">↗</a>`
-      : '';
     const div = document.createElement('div');
     div.className = 'card';
     div.style.marginBottom = '0.5rem';
@@ -338,8 +347,8 @@ function renderProjects() {
       <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap">
         <input type="text" value="${escHtml(p.lp_project)}" placeholder="lp_project" style="flex:1;min-width:140px;background:#111;border:1px solid #444;color:white;border-radius:4px;padding:.3rem .5rem" oninput="_projectsData[${i}].lp_project=this.value" />
         <div style="display:flex;align-items:center;gap:0.4rem;flex:2;min-width:200px">
-          <input type="url" value="${escHtml(url)}" placeholder="https://github.com/org/repo" style="flex:1;background:#111;border:1px solid #444;color:white;border-radius:4px;padding:.3rem .5rem" oninput="_projectsData[${i}].url=this.value;renderProjects()" />
-          ${linkBtn}
+          <input type="text" value="${escHtml(url)}" placeholder="https://github.com/org/repo" style="flex:1;background:#111;border:1px solid #444;color:white;border-radius:4px;padding:.3rem .5rem" oninput="_projectsData[${i}].url=this.value;const a=document.getElementById('url-link-${i}');a.href=this.value;a.style.visibility=this.value?'visible':'hidden'" />
+          <a id="url-link-${i}" href="${escHtml(url)}" target="_blank" rel="noopener" title="Open repository" style="color:var(--warm-grey);text-decoration:none;font-size:1rem;line-height:1;flex-shrink:0;visibility:${url ? 'visible' : 'hidden'}" onmouseover="this.style.color='white'" onmouseout="this.style.color='var(--warm-grey)'">↗</a>
         </div>
         <input type="text" value="${escHtml(p.branch)}" placeholder="branch" style="flex:1;min-width:100px;background:#111;border:1px solid #444;color:white;border-radius:4px;padding:.3rem .5rem" oninput="_projectsData[${i}].branch=this.value" />
         <input type="text" value="${escHtml(p.subdir)}" placeholder="subdir (optional)" style="flex:1;min-width:100px;background:#111;border:1px solid #444;color:white;border-radius:4px;padding:.3rem .5rem" oninput="_projectsData[${i}].subdir=this.value" />
@@ -348,6 +357,16 @@ function renderProjects() {
     `;
     container.appendChild(div);
   });
+
+  // Restore focus to the same input after rebuild.
+  if (savedFocus !== null) {
+    const inputs = [...container.querySelectorAll('input')];
+    const target = inputs[savedFocus.idx];
+    if (target) {
+      target.focus();
+      try { target.setSelectionRange(savedFocus.start, savedFocus.end); } catch (_) {}
+    }
+  }
 }
 
 function addProject() {
