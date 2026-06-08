@@ -15,10 +15,14 @@ def _openai_tool_to_gemini(tool: dict) -> gtypes.Tool:
     params = fn.get("parameters", {})
     props = {}
     for name, schema in params.get("properties", {}).items():
+        items_schema = None
+        if schema.get("items"):
+            items_schema = gtypes.Schema(type=_map_type(schema["items"].get("type", "string")))
         props[name] = gtypes.Schema(
             type=_map_type(schema.get("type", "string")),
             description=schema.get("description", ""),
             enum=schema.get("enum"),
+            items=items_schema,
         )
     fd = gtypes.FunctionDeclaration(
         name=fn["name"],
