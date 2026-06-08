@@ -309,6 +309,7 @@ function loadConfig() {
     document.getElementById('cfg-gemini-key').value = user?.auth?.gemini_api_key || '';
     document.getElementById('cfg-lp-instance').value = user?.defaults?.lp_instance || 'production';
     document.getElementById('cfg-provider').value = user?.defaults?.provider || 'openrouter';
+    document.getElementById('run-provider').value = user?.defaults?.provider || 'openrouter';
     document.getElementById('cfg-or-model').value = user?.openrouter?.model || '';
     document.getElementById('cfg-gemini-model').value = user?.gemini?.model || '';
     _projectsData = user?.projects || [];
