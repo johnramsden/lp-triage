@@ -22,7 +22,14 @@ class Usage:
     output_tokens: int
 
 
-ProviderEvent = TextChunk | ToolCall | Usage
+@dataclass
+class NativeModelContent:
+    """Raw provider model turn, preserved opaquely so providers can replay it
+    without lossy round-tripping through the OpenAI message format."""
+    content: object
+
+
+ProviderEvent = TextChunk | ToolCall | Usage | NativeModelContent
 
 
 @runtime_checkable

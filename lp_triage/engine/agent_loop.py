@@ -22,7 +22,7 @@ from .events import (
     StreamEvent,
     TokenUsageEvent,
 )
-from .providers.base import Provider, TextChunk, ToolCall, Usage
+from .providers.base import NativeModelContent, Provider, TextChunk, ToolCall, Usage
 from .repo_manager import RepoManager
 
 logger = logging.getLogger(__name__)
@@ -239,6 +239,7 @@ async def classify_bug(
     for _turn in range(max_turns):
         tool_calls_this_turn: list[ToolCall] = []
         text_buf = ""
+        native_model_content = None
 
         async for ev in provider.stream_completion(messages, ALL_TOOLS, model):
             if isinstance(ev, TextChunk):
@@ -253,6 +254,8 @@ async def classify_bug(
                 yield TokenUsageEvent(
                     bug_id=bug_id, input=ev.input_tokens, output=ev.output_tokens
                 )
+            elif isinstance(ev, NativeModelContent):
+                native_model_content = ev.content
 
         if not tool_calls_this_turn:
             logger.warning("Bug %d: no tool call on turn %d", bug_id, _turn)
@@ -266,6 +269,8 @@ async def classify_bug(
 
         # Build assistant message with all tool calls
         assistant_msg: dict = {"role": "assistant", "content": text_buf or None}
+        if native_model_content is not None:
+            assistant_msg["_native"] = native_model_content
         assistant_msg["tool_calls"] = [
             {
                 "id": tc.id,

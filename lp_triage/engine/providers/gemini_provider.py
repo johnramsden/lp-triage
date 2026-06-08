@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 from google import genai
 from google.genai import types as gtypes
 
-from .base import ProviderEvent, TextChunk, ToolCall, Usage
+from .base import NativeModelContent, ProviderEvent, TextChunk, ToolCall, Usage
 
 
 def _openai_tool_to_gemini(tool: dict) -> gtypes.Tool:
@@ -50,30 +50,29 @@ def _map_type(t: str | list) -> gtypes.Type:
     }.get(t, gtypes.Type.STRING)
 
 
-def _openai_messages_to_gemini(messages: list[dict]) -> tuple[str | None, list[gtypes.Content]]:
+def _build_gemini_contents(
+    messages: list[dict],
+) -> tuple[str | None, list[gtypes.Content]]:
+    """Convert OpenAI-format messages to Gemini contents.
+
+    For assistant turns, use the stored _native Gemini Content (which preserves
+    thought parts and thought_signatures) instead of re-converting from the
+    OpenAI representation, which would drop that information.
+    """
     system = None
     contents: list[gtypes.Content] = []
     for msg in messages:
         role = msg["role"]
         if role == "system":
             system = msg["content"]
-            continue
-        if role == "user":
-            contents.append(gtypes.Content(role="user", parts=[gtypes.Part(text=msg["content"])]))
+        elif role == "user":
+            contents.append(
+                gtypes.Content(role="user", parts=[gtypes.Part(text=msg["content"])])
+            )
         elif role == "assistant":
-            parts: list[gtypes.Part] = []
-            if msg.get("content"):
-                parts.append(gtypes.Part(text=msg["content"]))
-            for tc in msg.get("tool_calls", []):
-                parts.append(
-                    gtypes.Part(
-                        function_call=gtypes.FunctionCall(
-                            name=tc["function"]["name"],
-                            args=json.loads(tc["function"]["arguments"]),
-                        )
-                    )
-                )
-            contents.append(gtypes.Content(role="model", parts=parts))
+            native = msg.get("_native")
+            if native is not None:
+                contents.append(native)
         elif role == "tool":
             contents.append(
                 gtypes.Content(
@@ -101,13 +100,15 @@ class GeminiProvider:
         tools: list[dict],
         model: str,
     ) -> AsyncIterator[ProviderEvent]:
-        system, contents = _openai_messages_to_gemini(messages)
+        system, contents = _build_gemini_contents(messages)
         gemini_tools = [_openai_tool_to_gemini(t) for t in tools] if tools else None
 
         config = gtypes.GenerateContentConfig(
             system_instruction=system,
             tools=gemini_tools,
         )
+
+        model_parts: list[gtypes.Part] = []
 
         async for chunk in await self._client.aio.models.generate_content_stream(
             model=model,
@@ -121,6 +122,9 @@ class GeminiProvider:
                 )
 
             for part in chunk.parts or []:
+                model_parts.append(part)
+                if getattr(part, "thought", False):
+                    continue  # internal reasoning — not content
                 if part.text:
                     yield TextChunk(text=part.text)
                 if part.function_call:
@@ -130,3 +134,11 @@ class GeminiProvider:
                         name=fc.name,
                         arguments=dict(fc.args) if fc.args else {},
                     )
+
+        # Yield the complete native model turn so the caller can store it
+        # and replay it verbatim on the next turn, preserving thought parts
+        # and thought_signatures without lossy conversion.
+        if model_parts:
+            yield NativeModelContent(
+                content=gtypes.Content(role="model", parts=model_parts)
+            )
