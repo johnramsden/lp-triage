@@ -32,7 +32,10 @@ def _openai_tool_to_gemini(tool: dict) -> gtypes.Tool:
     return gtypes.Tool(function_declarations=[fd])
 
 
-def _map_type(t: str) -> gtypes.Type:
+def _map_type(t: str | list) -> gtypes.Type:
+    # JSON Schema allows "type": ["string", "null"] — pick the first non-null type.
+    if isinstance(t, list):
+        t = next((x for x in t if x != "null"), "string")
     return {
         "string": gtypes.Type.STRING,
         "integer": gtypes.Type.INTEGER,
